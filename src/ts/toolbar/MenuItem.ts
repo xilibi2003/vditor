@@ -126,6 +126,32 @@ export class MenuItem {
                         }
                         useHighlight = false;
                         setCurrentToolbar(vditor.toolbar.elements, ["inline-code"]);
+                    } else if (commandName === "inline-latex") {  // TODO: bug 
+                        const node = document.createTextNode("$$");
+                        range.insertNode(node);
+                        range.setStart(node, 1);
+                        range.collapse(true);
+                        setSelectionFocus(range);
+                        setCurrentToolbar(vditor.toolbar.elements, ["inline-latex"]);
+                    } else if (commandName === "latex") {
+                        const node = document.createElement("div");
+                        node.className = "vditor-wysiwyg__block";
+                        node.setAttribute("data-type", "math-block");
+
+                        if (range.collapsed) {
+                            node.innerHTML = `<pre data-block="0"><code data-type="math-block"> </code></pre>`;
+                        } else {
+                            node.innerHTML = `<pre data-block="0"><code data-type="math-block">${range.toString()}</code></pre>`;
+                            range.deleteContents();
+                        }
+
+                        range.insertNode(node);
+                        range.selectNodeContents(node.firstChild.firstChild);
+                        setSelectionFocus(range);
+
+                        processCodeRender(node, vditor);
+                        (node.querySelector(".vditor-wysiwyg__preview") as HTMLElement).click();
+
                     } else if (commandName === "code") {
                         const node = document.createElement("div");
                         if (range.collapsed) {

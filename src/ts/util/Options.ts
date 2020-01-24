@@ -33,7 +33,7 @@ export class Options {
             delay: 1000,
             hljs: {
                 enable: true,
-                lineNumber: false,
+                lineNumber: true,
                 style: "github",
             },
             inlineMathDigit: false,
@@ -41,7 +41,7 @@ export class Options {
             mode: "both",
         },
         resize: {
-            enable: false,
+            enable: true,
             position: "bottom",
         },
         toolbar: [{
@@ -175,6 +175,18 @@ export class Options {
             name: "help",
             tipPosition: "nw",
         }, {
+            name: "latex",
+            prefix: "$$\n",
+            suffix: "\n$$",
+            tipPosition: "n",
+        },
+        {
+            name: "inline-latex",
+            prefix: "$",
+            suffix: "$",
+            tipPosition: "n",
+        },
+         {
             name: "br",
         }],
         typewriterMode: false,

@@ -9,7 +9,7 @@ export class Help extends MenuItem {
         this.element.children[0].innerHTML = menuItem.icon || helpSVG;
         this.element.children[0].addEventListener(getEventName(), (event) => {
             event.preventDefault();
-            openURL("https://hacpai.com/guide/markdown");
+            openURL("https://learnblockchain.cn/site/markdown");
         });
     }
 }

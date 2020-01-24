@@ -27,6 +27,9 @@ import {Table} from "./Table";
 import {Undo} from "./Undo";
 import {Upload} from "./Upload";
 import {WYSIWYG} from "./WYSIWYG";
+import { Latex } from "./Latex";
+import { InlineLatex } from "./InlineLatex";
+
 
 export class Toolbar {
     public elements: { [key: string]: HTMLElement };
@@ -123,6 +126,12 @@ export class Toolbar {
                     break;
                 case "devtools":
                     menuItemObj = new Devtools(vditor, menuItem);
+                    break;
+                case "latex":
+                    menuItemObj = new Latex(vditor, menuItem);
+                    break;
+                case "inline-latex":
+                    menuItemObj = new InlineLatex(vditor, menuItem);
                     break;
                 default:
                     menuItemObj = new Custom(vditor, menuItem);

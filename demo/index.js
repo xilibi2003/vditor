@@ -15,6 +15,11 @@ window.vditor = new Vditor('vditor', {
       'j': 'https://unpkg.com/vditor@1.3.1/dist/images/emoji/j.png',
     },
   },
+
+
+  toolbar: [ 'undo' , 'redo', 'emoji', 'headings', 'bold', 'italic' , 'strike', '|',
+  'line' , 'quote' , 'list' , 'ordered-list' , 'check' , 'code' , 'inline-code' ,
+  'upload' , 'link' , 'table' ,  'wysiwyg', 'both' , 'preview' , 'format' , 'fullscreen' , 'info' , 'help', 'latex', 'inline-latex','br'] ,
   tab: '\t',
   upload: {
     accept: 'image/*,.mp3, .wav, .rar',
