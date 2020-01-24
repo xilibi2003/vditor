@@ -13,3 +13,13 @@
 渲染截图
 
 ![render](https://user-images.githubusercontent.com/970828/64341072-30ebd600-d01a-11e9-8e8a-b30c24364b58.png)
+
+
+### 开发
+
+安装 node LTS 版本
+下载 最新代码并解压
+根目录运行 npm install
+npm run start 启动本地服务器，打开 http://localhost:9000
+修改代码
+npm run build 打包代码到 dist 目录
