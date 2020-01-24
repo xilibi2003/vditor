@@ -57,6 +57,10 @@
 
     img {
       max-width: 100%;
+      display: block;
+      margin: 0 auto 20px;
+      border: 1px solid #ddd;
+      padding: 3px;
     }
 
     img.emoji {
@@ -120,6 +124,7 @@
     p {
       margin-top: 0;
       margin-bottom: 16px;
+      line-height: 30px;
     }
 
     blockquote {

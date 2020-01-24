@@ -1,4 +1,4 @@
-import italicSVG from "../../assets/icons/math-pi.svg";
+import italicSVG from "../../assets/icons/pi.svg";
 import {MenuItem} from "./MenuItem";
 
 export class Latex extends MenuItem {
