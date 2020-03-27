@@ -16,6 +16,8 @@ import {Info} from "./Info";
 import {InlineCode} from "./InlineCode";
 import {Italic} from "./Italic";
 import {Line} from "./Line";
+import {InlineLatex} from "./InlineLatex";
+import {Latex} from "./Latex";
 import {Link} from "./Link";
 import {List} from "./List";
 import {OrderedList} from "./OrderedList";
