@@ -1,6 +1,6 @@
 import contractSVG from "../../assets/icons/contract.svg";
 import fullscreenSVG from "../../assets/icons/fullscreen.svg";
-import {getEventName} from "../util/getEventName";
+import {getEventName} from "../util/compatibility";
 import {MenuItem} from "./MenuItem";
 
 export class Fullscreen extends MenuItem {
@@ -34,8 +34,12 @@ export class Fullscreen extends MenuItem {
                 });
             }
 
-            if (vditor.devtools && vditor.devtools.ASTChart && vditor.devtools.element.style.display === "block") {
-                vditor.devtools.ASTChart.resize();
+            if (vditor.devtools) {
+                vditor.devtools.renderEchart(vditor);
+            }
+
+            if (menuItem.click) {
+                menuItem.click(vditorElement.classList.contains("vditor--fullscreen"));
             }
         });
     }

@@ -1,19 +1,21 @@
 import emojiSVG from "../../assets/icons/emoji.svg";
-import {insertText} from "../editor/insertText";
-import {setSelectionFocus} from "../editor/setSelection";
-import {getEventName} from "../util/getEventName";
-import {insertHTML} from "../wysiwyg/insertHTML";
+import {Constants} from "../constants";
+import {insertText} from "../sv/insertText";
+import {getEventName} from "../util/compatibility";
+import {getEditorRange, insertHTML, setSelectionFocus} from "../util/selection";
 import {MenuItem} from "./MenuItem";
+import {hidePanel} from "./setToolbar";
 
 export class Emoji extends MenuItem {
     public element: HTMLElement;
+    public panelElement: HTMLElement;
 
     constructor(vditor: IVditor, menuItem: IMenuItem) {
         super(vditor, menuItem);
         this.element.children[0].innerHTML = menuItem.icon || emojiSVG;
 
-        const emojiPanelElement = document.createElement("div");
-        emojiPanelElement.className = "vditor-panel";
+        this.panelElement = document.createElement("div");
+        this.panelElement.className = "vditor-panel vditor-arrow";
 
         let commonEmojiHTML = "";
         Object.keys(vditor.options.hint.emoji).forEach((key) => {
@@ -31,39 +33,35 @@ data-value=":${key}: " data-key=":${key}:" class="vditor-emojis__icon" src="${em
     <span class="vditor-emojis__tip"></span><span>${vditor.options.hint.emojiTail || ""}</span>
 </div>`;
 
-        emojiPanelElement.innerHTML = `<div class="vditor-emojis" style="max-height: ${
+        this.panelElement.innerHTML = `<div class="vditor-emojis" style="max-height: ${
             vditor.options.height === "auto" ? "auto" : vditor.options.height as number - 80
-            }px">${commonEmojiHTML}</div>${tailHTML}`;
+        }px">${commonEmojiHTML}</div>${tailHTML}`;
 
-        this.element.appendChild(emojiPanelElement);
+        this.element.appendChild(this.panelElement);
 
-        this._bindEvent(emojiPanelElement, vditor);
+        this._bindEvent(vditor);
     }
 
-    public _bindEvent(emojiPanelElement: HTMLElement, vditor: IVditor) {
+    public _bindEvent(vditor: IVditor) {
         this.element.children[0].addEventListener(getEventName(), (event) => {
-            if (emojiPanelElement.style.display === "block") {
-                emojiPanelElement.style.display = "none";
+            if (this.element.firstElementChild.classList.contains(Constants.CLASS_MENU_DISABLED)) {
+                return;
+            }
+            if (this.panelElement.style.display === "block") {
+                this.panelElement.style.display = "none";
             } else {
-                emojiPanelElement.style.display = "block";
-                if (vditor.toolbar.elements.headings) {
-                    const headingsPanel = vditor.toolbar.elements.headings.children[1] as HTMLElement;
-                    headingsPanel.style.display = "none";
-                }
+                this.panelElement.style.display = "block";
             }
-
-            if (vditor.hint) {
-                vditor.hint.element.style.display = "none";
-            }
+            hidePanel(vditor, ["hint", "headings", "edit-mode"]);
             event.preventDefault();
         });
 
-        emojiPanelElement.querySelectorAll(".vditor-emojis button").forEach((element) => {
+        this.panelElement.querySelectorAll(".vditor-emojis button").forEach((element) => {
             element.addEventListener(getEventName(), (event: Event) => {
                 event.preventDefault();
                 const value = element.getAttribute("data-value");
                 if (vditor.currentMode === "wysiwyg") {
-                    const range = getSelection().getRangeAt(0);
+                    const range = getEditorRange(vditor.wysiwyg.element);
                     if (value.indexOf(":") > -1) {
                         insertHTML(vditor.lute.SpinVditorDOM(value), vditor);
                         range.insertNode(document.createTextNode(" "));
@@ -75,11 +73,13 @@ data-value=":${key}: " data-key=":${key}:" class="vditor-emojis__icon" src="${em
                 } else {
                     insertText(vditor, value, "", true);
                 }
-                emojiPanelElement.style.display = "none";
+                this.panelElement.style.display = "none";
             });
             element.addEventListener("mouseover", (event: Event) => {
-                emojiPanelElement.querySelector(".vditor-emojis__tip").innerHTML =
-                    (event.target as HTMLElement).getAttribute("data-key");
+                if ((event.target as HTMLElement).tagName === "BUTTON") {
+                    this.panelElement.querySelector(".vditor-emojis__tip").innerHTML =
+                        (event.target as HTMLElement).getAttribute("data-key");
+                }
             });
         });
     }

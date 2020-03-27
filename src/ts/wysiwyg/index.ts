@@ -1,22 +1,19 @@
-import {Constants} from "../constants";
-import {getSelectPosition} from "../editor/getSelectPosition";
-import {setSelectionByPosition, setSelectionFocus} from "../editor/setSelection";
 import {uploadFiles} from "../upload";
+import {setHeaders} from "../upload/setHeaders";
+import {isCtrl} from "../util/compatibility";
 import {focusEvent, hotkeyEvent, selectEvent} from "../util/editorCommenEvent";
 import {
-    hasClosestBlock,
-    hasClosestByClassName,
-    hasClosestByMatchTag,
-    hasClosestByTag,
+    hasClosestBlock, hasClosestByAttribute,
+    hasClosestByClassName, hasClosestByMatchTag,
 } from "../util/hasClosest";
-import {log} from "../util/log";
 import {processPasteCode} from "../util/processPasteCode";
-import {addP2Li} from "./addP2Li";
+import {getSelectPosition, insertHTML, setRangeByWbr, setSelectionByPosition, setSelectionFocus} from "../util/selection";
 import {afterRenderEvent} from "./afterRenderEvent";
 import {highlightToolbar} from "./highlightToolbar";
+import {getRenderElementNextNode, modifyPre} from "./inlineTag";
 import {input} from "./input";
-import {insertHTML} from "./insertHTML";
-import {processCodeRender} from "./processCodeRender";
+import {processCodeRender, showCode} from "./processCodeRender";
+import {isHeadingMD, isHrMD, renderToc} from "./processMD";
 
 class WYSIWYG {
     public element: HTMLPreElement;
@@ -24,24 +21,19 @@ class WYSIWYG {
     public afterRenderTimeoutId: number;
     public hlToolbarTimeoutId: number;
     public preventInput: boolean;
+    public composingLock: boolean = false;
 
     constructor(vditor: IVditor) {
-        this.element = document.createElement("pre");
-        this.element.className = "vditor-reset vditor-wysiwyg";
-        // TODO: placeholder
-        this.element.setAttribute("contenteditable", "true");
-        this.element.setAttribute("spellcheck", "false");
-        if (vditor.currentMode === "markdown") {
-            this.element.style.display = "none";
-        }
+        const divElement = document.createElement("div");
+        divElement.className = "vditor-wysiwyg";
 
-        this.element.innerHTML = Constants.WYSIWYG_EMPTY_P;
-        const popover = document.createElement("div");
-        popover.className = "vditor-panel vditor-panel--none";
-        popover.setAttribute("contenteditable", "false");
-        popover.setAttribute("data-render", "false");
-        this.popover = popover;
-        this.element.insertAdjacentElement("beforeend", popover);
+        divElement.innerHTML = `<pre class="vditor-reset" placeholder="${vditor.options.placeholder}"
+ contenteditable="true" spellcheck="false"></pre>
+<div class="vditor-panel vditor-panel--none"></div>`;
+
+        this.element = divElement.firstElementChild as HTMLPreElement;
+
+        this.popover = divElement.lastElementChild as HTMLDivElement;
 
         this.bindEvent(vditor);
 
@@ -53,13 +45,9 @@ class WYSIWYG {
     }
 
     private bindEvent(vditor: IVditor) {
-
         if (vditor.options.upload.url || vditor.options.upload.handler) {
             this.element.addEventListener("drop",
                 (event: CustomEvent & { dataTransfer?: DataTransfer, target: HTMLElement }) => {
-                    if (event.target.tagName === "INPUT") {
-                        return;
-                    }
                     if (event.dataTransfer.types[0] !== "Files") {
                         return;
                     }
@@ -71,38 +59,56 @@ class WYSIWYG {
                 });
         }
 
-        this.element.addEventListener("copy", (event: ClipboardEvent & { target: HTMLElement }) => {
-            if (event.target.tagName === "INPUT") {
+        this.element.addEventListener("scroll", () => {
+            if (this.popover.style.display !== "block") {
                 return;
             }
+            const top = parseInt(this.popover.getAttribute("data-top"), 10) - vditor.wysiwyg.element.scrollTop;
+            this.popover.style.top = Math.max(-11, Math.min(top, this.element.clientHeight - 21)) + "px";
+        });
+
+        this.element.addEventListener("copy", (event: ClipboardEvent & { target: HTMLElement }) => {
             const range = getSelection().getRangeAt(0);
-            if (range.collapsed) {
+            if (range.toString() === "") {
                 return;
             }
             event.stopPropagation();
             event.preventDefault();
 
-            if (range.commonAncestorContainer.parentElement.tagName === "CODE" &&
-                range.commonAncestorContainer.parentElement.parentElement.tagName !== "PRE") {
-                event.clipboardData.setData("text/plain", "`" +
-                    getSelection().getRangeAt(0).toString() + "`");
+            const codeElement = hasClosestByMatchTag(range.startContainer, "CODE");
+            if (codeElement) {
+                let codeText = "";
+                if (codeElement.parentElement.tagName === "PRE") {
+                    codeText = range.toString();
+                } else {
+                    codeText = "`" + range.toString() + "`";
+                }
+                event.clipboardData.setData("text/plain", codeText);
+                event.clipboardData.setData("text/html", "");
+                return;
+            }
+
+            const aElement = hasClosestByMatchTag(range.startContainer, "A");
+            const aEndElement = hasClosestByMatchTag(range.endContainer, "A");
+            if (aElement && aEndElement && aEndElement.isEqualNode(aElement)) {
+                let aTitle = aElement.getAttribute("title") || "";
+                if (aTitle) {
+                    aTitle = ` "${aTitle}"`;
+                }
+                event.clipboardData.setData("text/plain",
+                    `[${range.toString()}](${aElement.getAttribute("href")}${aTitle})`);
                 event.clipboardData.setData("text/html", "");
                 return;
             }
 
             const tempElement = document.createElement("div");
-            tempElement.appendChild(getSelection().getRangeAt(0).cloneContents());
-
-            addP2Li(tempElement);
+            tempElement.appendChild(range.cloneContents());
 
             event.clipboardData.setData("text/plain", vditor.lute.VditorDOM2Md(tempElement.innerHTML).trim());
             event.clipboardData.setData("text/html", "");
         });
 
         this.element.addEventListener("paste", (event: ClipboardEvent & { target: HTMLElement }) => {
-            if (event.target.tagName === "INPUT") {
-                return;
-            }
             event.stopPropagation();
             event.preventDefault();
             let textHTML = event.clipboardData.getData("text/html");
@@ -125,20 +131,29 @@ class WYSIWYG {
             // process code
             const code = processPasteCode(textHTML, textPlain, "wysiwyg");
             const range = getSelection().getRangeAt(0);
-            if (event.target.tagName === "CODE") {
+            const codeElement = hasClosestByMatchTag(event.target, "CODE");
+            if (codeElement) {
                 // 粘贴在代码位置
                 const position = getSelectPosition(event.target);
-                event.target.textContent = event.target.textContent.substring(0, position.start)
-                    + textPlain + event.target.textContent.substring(position.end);
+                codeElement.textContent = codeElement.textContent.substring(0, position.start)
+                    + textPlain + codeElement.textContent.substring(position.end);
                 setSelectionByPosition(position.start + textPlain.length, position.start + textPlain.length,
-                    event.target.parentElement);
+                    codeElement.parentElement);
             } else if (code) {
-                const pElement = hasClosestByMatchTag(range.startContainer, "P");
-                if (pElement) {
-                    range.setStartAfter(pElement);
+                const node = document.createElement("template");
+                node.innerHTML = code;
+                range.insertNode(node.content.cloneNode(true));
+                const blockElement = hasClosestByAttribute(range.startContainer, "data-block", "0");
+                if (blockElement) {
+                    blockElement.outerHTML = vditor.lute.SpinVditorDOM(blockElement.outerHTML);
+                } else {
+                    vditor.wysiwyg.element.innerHTML = vditor.lute.SpinVditorDOM(vditor.wysiwyg.element.innerHTML);
                 }
-                insertHTML(`<div class="vditor-wysiwyg__block" data-block="0" data-type="code-block"><pre><code>${
-                    code.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</code></pre></div>`, vditor);
+                vditor.wysiwyg.element.querySelectorAll(".vditor-wysiwyg__block").forEach(
+                    (blockRenderItem: HTMLElement) => {
+                        processCodeRender(blockRenderItem, vditor);
+                    });
+                setRangeByWbr(vditor.wysiwyg.element, range);
             } else {
                 if (textHTML.trim() !== "") {
                     const tempElement = document.createElement("div");
@@ -146,17 +161,47 @@ class WYSIWYG {
                     tempElement.querySelectorAll("[style]").forEach((e) => {
                         e.removeAttribute("style");
                     });
-                    addP2Li(tempElement);
-                    log("HTML2VditorDOM", tempElement.innerHTML, "argument", vditor.options.debugger);
+                    vditor.lute.SetJSRenderers({
+                        renderers: {
+                            HTML2VditorDOM: {
+                                renderLinkDest: (node) => {
+                                    const src = node.TokensStr();
+                                    if (node.__internal_object__.Parent.Type === 34 && src
+                                        && src.indexOf("file://") === -1 && vditor.options.upload.linkToImgUrl) {
+                                        const xhr = new XMLHttpRequest();
+                                        xhr.open("POST", vditor.options.upload.linkToImgUrl);
+                                        setHeaders(vditor, xhr);
+                                        xhr.onreadystatechange = () => {
+                                            if (xhr.readyState === XMLHttpRequest.DONE) {
+                                                const responseJSON = JSON.parse(xhr.responseText);
+                                                if (xhr.status === 200) {
+                                                    if (responseJSON.code !== 0) {
+                                                        vditor.tip.show(responseJSON.msg);
+                                                        return;
+                                                    }
+                                                    const original = responseJSON.data.originalURL;
+                                                    const imgElement: HTMLImageElement =
+                                                        this.element.querySelector(`img[src="${original}"]`);
+                                                    imgElement.src = responseJSON.data.url;
+                                                    afterRenderEvent(vditor);
+                                                } else {
+                                                    vditor.tip.show(responseJSON.msg);
+                                                }
+                                            }
+                                        };
+                                        xhr.send(JSON.stringify({url: src}));
+                                    }
+                                    return ["", Lute.WalkStop];
+                                },
+                            },
+                        },
+                    });
                     const pasteHTML = vditor.lute.HTML2VditorDOM(tempElement.innerHTML);
-                    log("HTML2VditorDOM", pasteHTML, "result", vditor.options.debugger);
                     insertHTML(pasteHTML, vditor);
                 } else if (event.clipboardData.files.length > 0 && vditor.options.upload.url) {
                     uploadFiles(vditor, event.clipboardData.files);
                 } else if (textPlain.trim() !== "" && event.clipboardData.files.length === 0) {
-                    log("Md2VditorDOM", textPlain, "argument", vditor.options.debugger);
                     const vditorDomHTML = vditor.lute.Md2VditorDOM(textPlain);
-                    log("Md2VditorDOM", vditorDomHTML, "result", vditor.options.debugger);
                     insertHTML(vditorDomHTML, vditor);
                 }
             }
@@ -169,65 +214,49 @@ class WYSIWYG {
         });
 
         // 中文处理
-        this.element.addEventListener("compositionend", (event: IHTMLInputEvent) => {
-            if (event.target.tagName === "INPUT") {
-                return;
-            }
-            input(event, vditor, getSelection().getRangeAt(0).cloneRange());
+        this.element.addEventListener("compositionstart", (event: InputEvent) => {
+            this.composingLock = true;
         });
 
-        this.element.addEventListener("input", (event: IHTMLInputEvent) => {
+        this.element.addEventListener("compositionend", (event: InputEvent) => {
+            const blockElement = hasClosestBlock(getSelection().getRangeAt(0).startContainer);
+            if (blockElement && blockElement.tagName.indexOf("H") === 0 && blockElement.textContent === ""
+                && blockElement.tagName.length === 2) {
+                // heading 为空删除 https://github.com/Vanessa219/vditor/issues/150
+                renderToc(this.element);
+                return;
+            }
+            input(vditor, getSelection().getRangeAt(0).cloneRange(), event);
+        });
+
+        this.element.addEventListener("input", (event: InputEvent) => {
             if (this.preventInput) {
                 this.preventInput = false;
                 return;
             }
-            const range = getSelection().getRangeAt(0).cloneRange();
-
-            if (range.commonAncestorContainer.nodeType !== 3
-                && (range.commonAncestorContainer as HTMLElement).classList.contains("vditor-panel--none")) {
-                event.preventDefault();
+            if (this.composingLock) {
                 return;
             }
-
-            if (event.isComposing) {
+            const range = getSelection().getRangeAt(0);
+            let blockElement = hasClosestBlock(range.startContainer);
+            if (!blockElement) {
+                // 没有被块元素包裹
+                modifyPre(vditor, range);
+                blockElement = hasClosestBlock(range.startContainer);
+            }
+            if (!blockElement) {
                 return;
             }
 
             // 前后空格处理
-            let blockElement = hasClosestBlock(range.startContainer);
-
-            // 没有被块元素包裹
-            if (!blockElement) {
-                const pElement = document.createElement("p");
-                pElement.setAttribute("data-block", "0");
-                if (vditor.wysiwyg.element.childNodes.length === 0) {
-                    pElement.textContent = "\n";
-                    range.insertNode(pElement);
-                } else {
-                    vditor.wysiwyg.element.childNodes.forEach((node: HTMLElement) => {
-                        if (node.nodeType === 3) {
-                            pElement.textContent = node.textContent;
-                            node.parentNode.insertBefore(pElement, node);
-                            node.remove();
-                        }
-                    });
-                }
-                range.selectNodeContents(pElement);
-                range.collapse(false);
-
-                blockElement = hasClosestBlock(range.startContainer);
-            }
-
-            if (!blockElement) {
-                return;
-            }
-
             const startOffset = getSelectPosition(blockElement, range).start;
 
             // 开始可以输入空格
             let startSpace = true;
-            for (let i = startOffset - 1; i >= 0; i--) {
-                if (blockElement.textContent.charAt(i) !== " ") {
+            for (let i = startOffset - 1; i > blockElement.textContent.substr(0, startOffset).lastIndexOf("\n"); i--) {
+                if (blockElement.textContent.charAt(i) !== " " &&
+                    // 多个 tab 前删除不形成代码块 https://github.com/Vanessa219/vditor/issues/162 1
+                    blockElement.textContent.charAt(i) !== "\t") {
                     startSpace = false;
                     break;
                 }
@@ -245,32 +274,69 @@ class WYSIWYG {
                 }
             }
 
-            if (startSpace || endSpace) {
+            if (blockElement.tagName.indexOf("H") === 0 && blockElement.textContent === ""
+                && blockElement.tagName.length === 2) {
+                // heading 为空删除 https://github.com/Vanessa219/vditor/issues/150
+                renderToc(this.element);
                 return;
             }
 
-            input(event, vditor, range);
+            if (startSpace || endSpace || isHrMD(blockElement.innerHTML) || isHeadingMD(blockElement.innerHTML)) {
+                return;
+            }
+
+            input(vditor, range, event);
         });
 
-        this.element.addEventListener("click", (event: IHTMLInputEvent) => {
-            if (hasClosestByClassName(event.target, "vditor-panel") || hasClosestByTag(event.target, "svg")) {
-                return;
-            }
-
-            highlightToolbar(vditor);
+        this.element.addEventListener("click", (event: MouseEvent & { target: HTMLInputElement }) => {
             if (event.target.tagName === "INPUT") {
                 if (event.target.checked) {
                     event.target.setAttribute("checked", "checked");
                 } else {
                     event.target.removeAttribute("checked");
                 }
+                this.preventInput = true;
+                afterRenderEvent(vditor);
+                return;
+            }
+
+            if (event.target.tagName === "IMG") {
+                const range = this.element.ownerDocument.createRange();
+                range.selectNode(event.target);
+                range.collapse(true);
+                setSelectionFocus(range);
+            }
+
+            highlightToolbar(vditor);
+
+            // 点击后光标落于预览区，需展开代码块
+            let previewElement = hasClosestByClassName(event.target, "vditor-wysiwyg__preview");
+            if (!previewElement) {
+                previewElement = hasClosestByClassName(getSelection().getRangeAt(0).startContainer, "vditor-wysiwyg__preview");
+            }
+            if (previewElement) {
+                showCode(previewElement);
             }
         });
 
-        this.element.addEventListener("keyup", (event: IHTMLInputEvent) => {
-            if (event.target.tagName === "INPUT") {
+        this.element.addEventListener("keyup", (event: KeyboardEvent & { target: HTMLElement }) => {
+            if (event.isComposing || isCtrl(event)) {
                 return;
             }
+
+            if ((event.key === "Backspace" || event.key === "Delete") &&
+                vditor.wysiwyg.element.innerHTML !== "" && vditor.wysiwyg.element.childNodes.length === 1 &&
+                vditor.wysiwyg.element.firstElementChild && vditor.wysiwyg.element.firstElementChild.tagName === "P"
+                && (vditor.wysiwyg.element.textContent === "" || vditor.wysiwyg.element.textContent === "\n")) {
+                // 为空时显示 placeholder
+                vditor.wysiwyg.element.innerHTML = "";
+            }
+
+            const range = getSelection().getRangeAt(0);
+
+            // 没有被块元素包裹
+            modifyPre(vditor, range);
+
             highlightToolbar(vditor);
 
             if (event.key !== "ArrowDown" && event.key !== "ArrowRight" && event.key !== "Backspace"
@@ -278,36 +344,59 @@ class WYSIWYG {
                 return;
             }
 
-            // 上下左右遇到块预览的处理
-            const range = getSelection().getRangeAt(0);
-            const previewElement = hasClosestByClassName(range.startContainer, "vditor-wysiwyg__preview");
+            // 上下左右，删除遇到块预览的处理
+            let previewElement = hasClosestByClassName(range.startContainer, "vditor-wysiwyg__preview");
+            if (!previewElement && range.startContainer.nodeType !== 3 && range.startOffset > 0) {
+                // table 前删除遇到代码块
+                const blockRenderElement = range.startContainer as HTMLElement;
+                if (blockRenderElement.classList.contains("vditor-wysiwyg__block")) {
+                    previewElement = blockRenderElement.lastElementChild as HTMLElement;
+                }
+            }
             if (!previewElement) {
                 return;
             }
+            const previousElement = previewElement.previousElementSibling as HTMLElement;
+            if (previousElement.style.display === "none") {
+                if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+                    showCode(previewElement);
+                } else {
+                    showCode(previewElement, false);
+                }
+                return;
+            }
+
             let codeElement = previewElement.previousElementSibling as HTMLElement;
             if (codeElement.tagName === "PRE") {
                 codeElement = codeElement.firstElementChild as HTMLElement;
             }
-            if (codeElement.style.display === "none") {
-                previewElement.click();
-            } else {
-                if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-                    const blockRenderElement = previewElement.parentElement;
-                    const nextNode = blockRenderElement.nextSibling as HTMLElement;
-                    if (nextNode && nextNode.nodeType !== 3 &&
-                        nextNode.classList.contains("vditor-wysiwyg__block")) {
-                        // 下一节点依旧为代码渲染块
-                        (nextNode.querySelector(".vditor-wysiwyg__preview") as HTMLElement).click();
-                        range.setStart(nextNode.firstElementChild.firstElementChild.firstChild, 0);
-                    } else {
-                        // 跳过渲染块，光标移动到下一个节点
-                        range.setStart(nextNode.firstChild, 0);
+
+            if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+                const blockRenderElement = previewElement.parentElement;
+                let nextNode = getRenderElementNextNode(blockRenderElement) as HTMLElement;
+                if (nextNode && nextNode.nodeType !== 3) {
+                    // 下一节点依旧为代码渲染块
+                    const nextRenderElement = nextNode.querySelector(".vditor-wysiwyg__preview") as HTMLElement;
+                    if (nextRenderElement) {
+                        showCode(nextRenderElement);
+                        return;
                     }
-                } else {
-                    range.selectNodeContents(codeElement);
-                    range.collapse(false);
                 }
-                setSelectionFocus(range);
+                // 跳过渲染块，光标移动到下一个节点
+                if (nextNode.nodeType === 3) {
+                    // inline
+                    while (nextNode.textContent.length === 0 && nextNode.nextSibling) {
+                        // https://github.com/Vanessa219/vditor/issues/100 2
+                        nextNode = nextNode.nextSibling as HTMLElement;
+                    }
+                    range.setStart(nextNode, 1);
+                } else {
+                    // block
+                    range.setStart(nextNode.firstChild, 0);
+                }
+            } else {
+                range.selectNodeContents(codeElement);
+                range.collapse(false);
             }
         });
     }

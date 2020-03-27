@@ -1,4 +1,5 @@
-export const processPasteCode = (html: string, text: string, type = "markdown") => {
+
+export const processPasteCode = (html: string, text: string, type = "sv") => {
     const tempElement = document.createElement("div");
     tempElement.innerHTML = html;
     let isCode = false;
@@ -8,7 +9,9 @@ export const processPasteCode = (html: string, text: string, type = "markdown") 
         isCode = true;
     }
     const pres = tempElement.querySelectorAll("pre");
-    if (tempElement.childElementCount === 1 && pres.length === 1 && pres[0].className !== "vditor-textarea") {
+    if (tempElement.childElementCount === 1 && pres.length === 1
+        && pres[0].className !== "vditor-wysiwyg"
+        && pres[0].className !== "vditor-textarea") {
         // IDE
         isCode = true;
     }
@@ -19,12 +22,16 @@ export const processPasteCode = (html: string, text: string, type = "markdown") 
 
     if (isCode) {
         const code = text || html;
-        if (type === "wysiwyg") {
-            return `${code}`;
-        }
         if (/\n/.test(code) || pres.length === 1) {
+            if (type === "wysiwyg") {
+                return `<div class="vditor-wysiwyg__block" data-block="0" data-type="code-block"><pre><code>${
+                    code.replace(/&/g, "&amp;").replace(/</g, "&lt;")}<wbr></code></pre></div>`;
+            }
             return "```\n" + code + "\n```";
         } else {
+            if (type === "wysiwyg") {
+                return `<code>${code.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</code><wbr>`;
+            }
             return `\`${code}\``;
         }
     }

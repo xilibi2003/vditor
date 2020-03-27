@@ -1,7 +1,8 @@
-import {insertText} from "../editor/insertText";
-import {setSelectionFocus} from "../editor/setSelection";
 import {i18n} from "../i18n/index";
-import {getRange} from "../util/getRange";
+import {insertText} from "../sv/insertText";
+import {getEditorRange, setSelectionFocus} from "../util/selection";
+import {getElement} from "./getElement";
+import {setHeaders} from "./setHeaders";
 
 class Upload {
     public element: HTMLElement;
@@ -73,7 +74,7 @@ const validateFile = (vditor: IVditor, files: File[]) => {
 };
 
 const genUploadedLabel = (responseText: string, vditor: IVditor) => {
-    const editorElement = vditor.currentMode === "markdown" ? vditor.editor.element : vditor.wysiwyg.element;
+    const editorElement = getElement(vditor);
     editorElement.focus();
     const response = JSON.parse(responseText);
     let errorTip = "";
@@ -121,7 +122,7 @@ const genUploadedLabel = (responseText: string, vditor: IVditor) => {
             || type === ".svg"
             || type === ".webp") {
             if (vditor.currentMode === "wysiwyg") {
-                succFileText += `<img title="${filename}" src="${path}">`;
+                succFileText += `<img alt="${filename}" src="${path}">`;
             } else {
                 succFileText += `![${filename}](${path})\n`;
             }
@@ -134,7 +135,7 @@ const genUploadedLabel = (responseText: string, vditor: IVditor) => {
         }
     });
     setSelectionFocus(vditor.upload.range);
-    if (vditor.currentMode === "wysiwyg") {
+    if (vditor.currentMode !== "sv") {
         document.execCommand("insertHTML", false, succFileText);
     } else {
         insertText(vditor, succFileText, "", true);
@@ -166,7 +167,7 @@ const uploadFiles = (vditor: IVditor, files: FileList | DataTransferItemList | F
         if (element) {
             element.value = "";
         }
-        alert("please config: options.upload.url");
+        vditor.tip.show("please config: options.upload.url");
         return;
     }
 
@@ -181,9 +182,9 @@ const uploadFiles = (vditor: IVditor, files: FileList | DataTransferItemList | F
             return;
         }
     }
-    const editorElement = vditor.currentMode === "markdown" ? vditor.editor.element : vditor.wysiwyg.element;
+    const editorElement = getElement(vditor);
 
-    vditor.upload.range = getRange(editorElement);
+    vditor.upload.range = getEditorRange(editorElement);
 
     const validateResult = validateFile(vditor, fileList);
     if (validateResult.length === 0) {
@@ -206,11 +207,7 @@ const uploadFiles = (vditor: IVditor, files: FileList | DataTransferItemList | F
     if (vditor.options.upload.withCredentials) {
         xhr.withCredentials = true;
     }
-    if (vditor.options.upload.headers) {
-        Object.keys(vditor.options.upload.headers).forEach((key) => {
-            xhr.setRequestHeader(key, vditor.options.upload.headers[key]);
-        });
-    }
+    setHeaders(vditor, xhr);
     vditor.upload.isUploading = true;
     editorElement.setAttribute("contenteditable", "false");
 

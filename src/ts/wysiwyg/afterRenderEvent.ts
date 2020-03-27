@@ -1,16 +1,27 @@
-import {Constants} from "../constants";
+import {isSafari} from "../util/compatibility";
 import {getMarkdown} from "../util/getMarkdown";
 
-export const afterRenderEvent = (vditor: IVditor, isAddUndoStack = true, hint = false) => {
+export const afterRenderEvent = (vditor: IVditor, options = {
+    enableAddUndoStack: true,
+    enableHint: false,
+    enableInput: true,
+}) => {
+    if (options.enableHint && vditor.hint) {
+        vditor.hint.render(vditor);
+    }
     clearTimeout(vditor.wysiwyg.afterRenderTimeoutId);
     vditor.wysiwyg.afterRenderTimeoutId = window.setTimeout(() => {
+        if (vditor.wysiwyg.composingLock && isSafari()) {
+            // safari 中文输入遇到 addToUndoStack 会影响下一次的中文输入
+            return;
+        }
         const text = getMarkdown(vditor);
-        if (vditor.options.counter > 0) {
-            vditor.counter.render(text.length, vditor.options.counter);
+        if (typeof vditor.options.input === "function" && options.enableInput) {
+            vditor.options.input(text);
         }
 
-        if (typeof vditor.options.input === "function") {
-            vditor.options.input(text);
+        if (vditor.options.counter > 0) {
+            vditor.counter.render(text.length, vditor.options.counter);
         }
 
         if (vditor.options.cache) {
@@ -21,22 +32,8 @@ export const afterRenderEvent = (vditor: IVditor, isAddUndoStack = true, hint = 
             vditor.devtools.renderEchart(vditor);
         }
 
-        if (isAddUndoStack) {
+        if (options.enableAddUndoStack) {
             vditor.wysiwygUndo.addToUndoStack(vditor);
-        }
-
-        if (hint && vditor.hint) {
-            vditor.hint.render(vditor);
-        }
-
-        // 末尾保持一个空 P 元素
-        const lastElement = vditor.wysiwyg.element.lastElementChild;
-        if (lastElement.classList.contains("vditor-panel--none") &&
-            lastElement.previousElementSibling.tagName !== "P") {
-            lastElement.insertAdjacentHTML("beforebegin", Constants.WYSIWYG_EMPTY_P);
-        }
-        if (!lastElement.classList.contains("vditor-panel--none") && lastElement.tagName !== "P") {
-            vditor.wysiwyg.element.insertAdjacentHTML("beforeend", Constants.WYSIWYG_EMPTY_P);
         }
     }, 800);
 };

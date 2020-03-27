@@ -1,19 +1,11 @@
 import previewSVG from "../../assets/icons/preview.svg";
-import {getEventName} from "../util/getEventName";
-import {setPreviewMode} from "../util/setPreviewMode";
+import {setPreviewMode} from "../ui/setPreviewMode";
+import {getEventName} from "../util/compatibility";
 import {MenuItem} from "./MenuItem";
 
 export class Preview extends MenuItem {
     constructor(vditor: IVditor, menuItem: IMenuItem) {
         super(vditor, menuItem);
-        const hasWYSIWYG = vditor.options.toolbar.find((item: IMenuItem) => {
-            if (item.name === "wysiwyg") {
-                return true;
-            }
-        });
-        if (vditor.currentMode === "wysiwyg" && hasWYSIWYG) {
-            this.element.style.display = "none";
-        }
         this.element.children[0].innerHTML = menuItem.icon || previewSVG;
         if (vditor.currentPreviewMode === "preview") {
             this.element.children[0].className =
@@ -24,6 +16,9 @@ export class Preview extends MenuItem {
 
     public _bindEvent(vditor: IVditor) {
         this.element.children[0].addEventListener(getEventName(), (event) => {
+            if (vditor.currentMode === "wysiwyg") {
+                return;
+            }
             if (vditor.currentPreviewMode === "preview") {
                 setPreviewMode("editor", vditor);
             } else {

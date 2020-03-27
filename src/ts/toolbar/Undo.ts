@@ -1,7 +1,8 @@
 import undoSVG from "../../assets/icons/undo.svg";
-import {getEventName} from "../util/getEventName";
-import {disableToolbar} from "./disableToolbar";
+import {Constants} from "../constants";
+import {getEventName} from "../util/compatibility";
 import {MenuItem} from "./MenuItem";
+import {disableToolbar} from "./setToolbar";
 
 export class Undo extends MenuItem {
     constructor(vditor: IVditor, menuItem: IMenuItem) {
@@ -9,10 +10,15 @@ export class Undo extends MenuItem {
         this.element.children[0].innerHTML = menuItem.icon || undoSVG;
         disableToolbar({undo: this.element}, ["undo"]);
         this.element.children[0].addEventListener(getEventName(), (event) => {
-            if (vditor.currentMode === "markdown") {
+            if (this.element.firstElementChild.classList.contains(Constants.CLASS_MENU_DISABLED)) {
+                return;
+            }
+            if (vditor.currentMode === "sv") {
                 vditor.undo.undo(vditor);
-            } else {
+            } else if (vditor.currentMode === "wysiwyg") {
                 vditor.wysiwygUndo.undo(vditor);
+            } else if (vditor.currentMode === "ir") {
+                vditor.irUndo.undo(vditor);
             }
             event.preventDefault();
         });

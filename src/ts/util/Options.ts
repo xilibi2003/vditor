@@ -12,22 +12,27 @@ export class Options {
         counter: 0,
         debugger: false,
         height: "auto",
+        hideToolbar: false,
         hint: {
             delay: 200,
             emoji: {
                 "+1": "👍",
                 "-1": "👎",
-                "cold_sweat": "😰",
+                "confused": "😕",
+                "eyes": "👀️",
                 "heart": "❤️",
+                "rocket": "🚀️",
+                "smile": "😄",
+                "tada": "🎉️",
             },
             emojiPath: `https://cdn.jsdelivr.net/npm/vditor@${VDITOR_VERSION}/dist/images/emoji`,
         },
         keymap: {
             deleteLine: "⌘-Backspace",
-            duplicate: "⌘-d",
+            duplicate: "⌘-D",
         },
         lang: "zh_CN",
-        mode: "wysiwyg-show",
+        mode: "wysiwyg",
         placeholder: "",
         preview: {
             delay: 1000,
@@ -36,7 +41,18 @@ export class Options {
                 lineNumber: true,
                 style: "github",
             },
-            inlineMathDigit: false,
+            markdown: {
+                autoSpace: false,
+                chinesePunct: false,
+                fixTermTypo: false,
+                footnotes: true,
+                toc: false,
+            },
+            math: {
+                engine: "KaTeX",
+                inlineDigit: false,
+                macros: {},
+            },
             maxWidth: 768,
             mode: "both",
         },
@@ -44,34 +60,35 @@ export class Options {
             enable: true,
             position: "bottom",
         },
+        theme: "classic",
         toolbar: [{
-            hotkey: "⌘-e",
+            hotkey: "⌘-E",
             name: "emoji",
             tipPosition: "ne",
         }, {
-            hotkey: "⌘-h",
+            hotkey: "⌘-H",
             name: "headings",
             tipPosition: "ne",
         }, {
-            hotkey: "⌘-b",
+            hotkey: "⌘-B",
             name: "bold",
             prefix: "**",
             suffix: "**",
             tipPosition: "ne",
         }, {
-            hotkey: "⌘-i",
+            hotkey: "⌘-I",
             name: "italic",
             prefix: "*",
             suffix: "*",
             tipPosition: "ne",
         }, {
-            hotkey: "⌘-s",
+            hotkey: "⌘-S",
             name: "strike",
             prefix: "~~",
             suffix: "~~",
             tipPosition: "ne",
         }, {
-            hotkey: "⌘-k",
+            hotkey: "⌘-K",
             name: "link",
             prefix: "[",
             suffix: "](https://)",
@@ -79,40 +96,40 @@ export class Options {
         }, {
             name: "|",
         }, {
-            hotkey: "⌘-l",
+            hotkey: "⌘-L",
             name: "list",
             prefix: "* ",
             tipPosition: "n",
         }, {
-            hotkey: "⌘-o",
+            hotkey: "⌘-O",
             name: "ordered-list",
             prefix: "1. ",
             tipPosition: "n",
         }, {
-            hotkey: "⌘-j",
+            hotkey: "⌘-J",
             name: "check",
             prefix: "* [ ] ",
             tipPosition: "n",
         }, {
             name: "|",
         }, {
-            hotkey: "⌘-.",
+            hotkey: "⌘-;",
             name: "quote",
             prefix: "> ",
             tipPosition: "n",
         }, {
-            hotkey: "⌘-⇧-d",
+            hotkey: "⌘-⇧-D",
             name: "line",
             prefix: "---",
             tipPosition: "n",
         }, {
-            hotkey: "⌘-u",
+            hotkey: "⌘-U",
             name: "code",
             prefix: "```\n",
             suffix: "\n```",
             tipPosition: "n",
         }, {
-            hotkey: "⌘-g",
+            hotkey: "⌘-G",
             name: "inline-code",
             prefix: "`",
             suffix: "`",
@@ -120,13 +137,14 @@ export class Options {
         }, {
             name: "|",
         }, {
+            hotkey: "⌘-⇧-U",
             name: "upload",
             tipPosition: "n",
         }, {
             name: "record",
             tipPosition: "n",
         }, {
-            hotkey: "⌘-m",
+            hotkey: "⌘-M",
             name: "table",
             prefix: "| col1",
             suffix: " | col2 | col3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |",
@@ -134,29 +152,29 @@ export class Options {
         }, {
             name: "|",
         }, {
-            hotkey: "⌘-z",
+            hotkey: "⌘-Z",
             name: "undo",
             tipPosition: "n",
         }, {
-            hotkey: "⌘-y",
+            hotkey: "⌘-Y",
             name: "redo",
             tipPosition: "n",
         }, {
             name: "|",
         }, {
-            hotkey: "⌘-⇧-m",
-            name: "wysiwyg",
+            hotkey: "⌘-⇧-M",
+            name: "edit-mode",
             tipPosition: "nw",
         }, {
-            hotkey: "⌘-p",
+            hotkey: "⌘-P",
             name: "both",
             tipPosition: "nw",
         }, {
-            hotkey: "⌘-⇧-p",
+            hotkey: "⌘-⇧-P",
             name: "preview",
             tipPosition: "nw",
         }, {
-            hotkey: "⌘-⇧-f",
+            hotkey: "⌘-⇧-F",
             name: "format",
             tipPosition: "nw",
         }, {
@@ -240,6 +258,14 @@ export class Options {
                 if (this.options.preview.hljs) {
                     this.options.preview.hljs =
                         Object.assign({}, this.defaultOptions.preview.hljs, this.options.preview.hljs);
+                }
+                if (this.options.preview.math) {
+                    this.options.preview.math =
+                        Object.assign({}, this.defaultOptions.preview.math, this.options.preview.math);
+                }
+                if (this.options.preview.markdown) {
+                    this.options.preview.markdown =
+                        Object.assign({}, this.defaultOptions.preview.markdown, this.options.preview.markdown);
                 }
             }
 

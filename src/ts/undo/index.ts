@@ -1,10 +1,10 @@
 import DiffMatchPatch, {diff_match_patch, patch_obj} from "diff-match-patch";
-import {formatRender} from "../editor/formatRender";
-import {getSelectPosition} from "../editor/getSelectPosition";
-import {disableToolbar} from "../toolbar/disableToolbar";
-import {enableToolbar} from "../toolbar/enableToolbar";
+import {formatRender} from "../sv/formatRender";
+import {disableToolbar} from "../toolbar/setToolbar";
+import {enableToolbar} from "../toolbar/setToolbar";
 import {scrollCenter} from "../util/editorCommenEvent";
 import {getMarkdown} from "../util/getMarkdown";
+import {getSelectPosition} from "../util/selection";
 
 class Undo {
     private undoStack: Array<{ patchList: patch_obj[], end: number }>;
@@ -24,13 +24,30 @@ class Undo {
         this.hasUndo = false;
     }
 
+    public resetIcon(vditor: IVditor) {
+        if (this.undoStack.length > 1) {
+            enableToolbar(vditor.toolbar.elements, ["undo"]);
+        } else {
+            disableToolbar(vditor.toolbar.elements, ["undo"]);
+        }
+
+        if (this.redoStack.length !== 0) {
+            enableToolbar(vditor.toolbar.elements, ["redo"]);
+        } else {
+            disableToolbar(vditor.toolbar.elements, ["redo"]);
+        }
+    }
+
     public recordFirstPosition(vditor: IVditor) {
         if (this.undoStack.length === 1) {
-            this.undoStack[0].end = getSelectPosition(vditor.editor.element).end;
+            this.undoStack[0].end = getSelectPosition(vditor.sv.element).end;
         }
     }
 
     public undo(vditor: IVditor) {
+        if (vditor.sv.element.getAttribute("contenteditable") === "false") {
+            return;
+        }
         if (this.undoStack.length < 2) {
             return;
         }
@@ -44,6 +61,9 @@ class Undo {
     }
 
     public redo(vditor: IVditor) {
+        if (vditor.sv.element.getAttribute("contenteditable") === "false") {
+            return;
+        }
         const state = this.redoStack.pop();
         if (!state || !state.patchList) {
             return;
@@ -62,7 +82,7 @@ class Undo {
                 return;
             }
             this.lastText = text;
-            this.undoStack.push({patchList, end: getSelectPosition(vditor.editor.element).end});
+            this.undoStack.push({patchList, end: getSelectPosition(vditor.sv.element).end});
             if (this.undoStack.length > this.stackSize) {
                 this.undoStack.shift();
             }
@@ -105,9 +125,13 @@ class Undo {
 
         this.lastText = text;
 
-        formatRender(vditor, text, positoin, false);
+        formatRender(vditor, text, positoin, {
+            enableAddUndoStack: false,
+            enableHint: false,
+            enableInput: true,
+        });
 
-        scrollCenter(vditor.editor.element);
+        scrollCenter(vditor.sv.element);
 
         if (this.undoStack.length > 1) {
             enableToolbar(vditor.toolbar.elements, ["undo"]);

@@ -1,13 +1,42 @@
 import codeSVG from "../../assets/icons/code.svg";
-import {setSelectionFocus} from "../editor/setSelection";
+import {Constants} from "../constants";
 import {abcRender} from "../markdown/abcRender";
 import {chartRender} from "../markdown/chartRender";
 import {codeRender} from "../markdown/codeRender";
+import { graphvizRender } from "../markdown/graphvizRender";
 import {highlightRender} from "../markdown/highlightRender";
-import {mathRenderByLute} from "../markdown/mathRenderByLute";
+import {mathRender} from "../markdown/mathRender";
 import {mermaidRender} from "../markdown/mermaidRender";
+import {hasClosestByTag} from "../util/hasClosest";
+import {setSelectionFocus} from "../util/selection";
 
-// html, math, math-inline, code block, abc, chart, mermaid
+export const showCode = (previewElement: HTMLElement, first = true) => {
+    const previousElement = previewElement.previousElementSibling as HTMLElement;
+    const range = previousElement.ownerDocument.createRange();
+    if (previousElement.tagName === "CODE") {
+        previousElement.style.display = "inline-block";
+        if (first) {
+            range.setStart(previousElement.firstChild, 1);
+        } else {
+            range.selectNodeContents(previousElement);
+        }
+    } else {
+        previousElement.style.display = "block";
+
+        if (!previousElement.firstChild.firstChild) {
+            previousElement.firstChild.appendChild(document.createTextNode(""));
+        }
+        range.selectNodeContents(previousElement.firstChild);
+    }
+    if (first) {
+        range.collapse(true);
+    } else {
+        range.collapse(false);
+    }
+    setSelectionFocus(range);
+};
+
+// html, math, math-inline, code block, abc, chart, mermaid, graphviz
 export const processCodeRender = (blockElement: HTMLElement, vditor: IVditor) => {
     const blockType = blockElement.getAttribute("data-type");
     if (!blockType) {
@@ -19,33 +48,6 @@ export const processCodeRender = (blockElement: HTMLElement, vditor: IVditor) =>
         blockElement.insertAdjacentHTML("beforeend", `<${tagName} class="vditor-wysiwyg__preview"></${tagName}>`);
         previewPanel = blockElement.querySelector(".vditor-wysiwyg__preview");
         previewPanel.setAttribute("data-render", "false");
-        const showCode = (previewElement: HTMLElement) => {
-            let showCodeElement = previewElement.previousElementSibling as HTMLElement;
-            if (showCodeElement.tagName === "PRE") {
-                showCodeElement = showCodeElement.firstElementChild as HTMLElement;
-            }
-
-            const range = showCodeElement.ownerDocument.createRange();
-            if (showCodeElement.parentElement && showCodeElement.parentElement.tagName !== "PRE") {
-                showCodeElement.style.display = "inline";
-                if (showCodeElement.parentElement.previousSibling) {
-                    range.setStart(showCodeElement.firstChild, 1);
-                } else {
-                    range.setStart(showCodeElement.firstChild, 0);
-                }
-            } else {
-                showCodeElement.parentElement.style.display = "block";
-                if (!showCodeElement.firstChild) {
-                    showCodeElement.appendChild(document.createTextNode(""));
-                }
-                range.setStart(showCodeElement.firstChild, 0);
-            }
-            range.collapse(true);
-            setSelectionFocus(range);
-        };
-        previewPanel.addEventListener("click", () => {
-            showCode(previewPanel);
-        });
     }
 
     let codeElement = previewPanel.previousElementSibling as HTMLElement;
@@ -55,7 +57,8 @@ export const processCodeRender = (blockElement: HTMLElement, vditor: IVditor) =>
     const innerHTML = codeElement.innerHTML || "\n";
     if (blockType === "code-block") {
         const language = codeElement.className.replace("language-", "");
-        previewPanel.innerHTML = `<pre><code class="${codeElement.className}">${innerHTML}</code></pre>`;
+        // 代码块下方输入中文会消失，因此要 trim
+        previewPanel.innerHTML = `<pre><code class="${codeElement.className}">${innerHTML.trimRight()}</code></pre>`;
         if (language === "abc") {
             previewPanel.style.marginTop = "1em";
             abcRender(previewPanel, vditor.options.cdn);
@@ -64,6 +67,8 @@ export const processCodeRender = (blockElement: HTMLElement, vditor: IVditor) =>
                 vditor.options.cdn);
         } else if (language === "echarts") {
             chartRender(previewPanel, vditor.options.cdn);
+        } else if (language === "graphviz") {
+            graphvizRender(previewPanel, vditor.options.cdn);
         } else {
             highlightRender(Object.assign({}, vditor.options.preview.hljs, {enable: true}),
                 previewPanel, vditor.options.cdn);
@@ -73,12 +78,25 @@ export const processCodeRender = (blockElement: HTMLElement, vditor: IVditor) =>
         const tempHTML = innerHTML.replace(/&amp;/g, "&")
             .replace(/&lt;/g, "<").replace(/&gt;/g, ">");
         if (blockType === "html-inline") {
-            previewPanel.innerHTML = codeSVG + tempHTML;
+            previewPanel.innerHTML = codeSVG + tempHTML.replace(Constants.ZWSP, "");
+            previewPanel.setAttribute("data-html", innerHTML.replace(Constants.ZWSP, ""));
             return;
         }
         previewPanel.innerHTML = tempHTML;
     } else if (blockType.indexOf("math") > -1) {
-        previewPanel.innerHTML = `<${tagName} class="vditor-math">${innerHTML}</${tagName}>`;
-        mathRenderByLute(previewPanel, vditor.options.cdn);
+        previewPanel.innerHTML = `<${tagName} class="vditor-math">${
+            innerHTML.replace(Constants.ZWSP, "")}</${tagName}>`;
+        mathRender(previewPanel, {cdn: vditor.options.cdn, math: vditor.options.preview.math});
+    }
+
+    if (getSelection().rangeCount > 0) {
+        const range = getSelection().getRangeAt(0);
+        if (blockElement.contains(range.startContainer) && hasClosestByTag(range.startContainer, "CODE")) {
+            let display = "inline-block";
+            if (blockElement.firstElementChild.tagName === "PRE") {
+                display = "block";
+            }
+            (blockElement.firstElementChild as HTMLElement).style.display = display;
+        }
     }
 };

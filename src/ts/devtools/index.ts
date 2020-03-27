@@ -7,7 +7,7 @@ declare const echarts: {
 
 export class DevTools {
     public element: HTMLDivElement;
-    public ASTChart: IEChart;
+    private ASTChart: IEChart;
 
     constructor() {
         this.element = document.createElement("div");
@@ -15,7 +15,7 @@ export class DevTools {
         this.element.innerHTML = '<div class="vditor-reset--error"></div><div style="height: 100%;"></div>';
     }
 
-    public async renderEchart(vditor: IVditor) {
+    public renderEchart(vditor: IVditor) {
         if (vditor.devtools.element.style.display !== "block") {
             return;
         }
@@ -68,6 +68,7 @@ export class DevTools {
                     show: true,
                 },
             });
+            this.ASTChart.resize();
         } catch (e) {
             (this.element.lastElementChild as HTMLElement).style.display = "none";
             this.element.firstElementChild.innerHTML = e;

@@ -21,7 +21,6 @@ module.exports = {
   },
   entry: {
     'index.js': './demo/index.js',
-    'index-preview.js': './demo/index-preview.js',
     'jest-puppeteer.js': './demo/jest-puppeteer.js',
   },
   resolve: {
@@ -117,11 +116,6 @@ module.exports = {
       chunks: ['jest-puppeteer.js'],
       filename: './jest-puppeteer.html',
       template: './demo/jest-puppeteer.html',
-    }),
-    new HtmlWebpackPlugin({
-      chunks: ['index-preview.js'],
-      filename: './index-preview.html',
-      template: './demo/index-preview.html',
     }),
     new webpack.DefinePlugin({
       VDITOR_VERSION: JSON.stringify(pkg.version),

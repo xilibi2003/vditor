@@ -1,6 +1,6 @@
 import pauseSVG from "../../assets/icons/pause.svg";
 import playSVG from "../../assets/icons/play.svg";
-import {setSelectionFocus} from "../editor/setSelection";
+import {setSelectionFocus} from "../util/selection";
 
 declare global {
     interface Window {
@@ -77,7 +77,7 @@ export const speechRender = (element: HTMLElement, lang: (keyof II18nLang) = "zh
         });
     }
 
-    element.addEventListener("mouseup", (event: IHTMLInputEvent) => {
+    element.addEventListener("mouseup", (event: MouseEvent) => {
         const text = getSelection().toString().trim();
         speechSynthesis.cancel();
         if (getSelection().toString().trim() === "") {

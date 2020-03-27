@@ -1,13 +1,9 @@
-import {insertText} from "../editor/insertText";
-import {setSelectionFocus} from "../editor/setSelection";
+import {Constants} from "../constants";
 import {i18n} from "../i18n/index";
-import {getEventName} from "../util/getEventName";
-import {hasClosestByMatchTag} from "../util/hasClosest";
-import {updateHotkeyTip} from "../util/updateHotkeyTip";
-import {afterRenderEvent} from "../wysiwyg/afterRenderEvent";
-import {genAPopover, highlightToolbar} from "../wysiwyg/highlightToolbar";
-import {processCodeRender} from "../wysiwyg/processCodeRender";
-import {setCurrentToolbar} from "./setCurrentToolbar";
+import {insertText} from "../sv/insertText";
+import {getEventName} from "../util/compatibility";
+import {updateHotkeyTip} from "../util/compatibility";
+import {toolbarEvent} from "../wysiwyg/toolbarEvent";
 
 export class MenuItem {
     public element: HTMLElement;
@@ -16,11 +12,12 @@ export class MenuItem {
     constructor(vditor: IVditor, menuItem: IMenuItem) {
         this.menuItem = menuItem;
         this.element = document.createElement("div");
+        this.element.className = "vditor-toolbar__item";
         const iconElement = document.createElement(menuItem.name === "upload" ? "div" : "button");
         iconElement.setAttribute("data-type", menuItem.name);
         iconElement.className = `vditor-tooltipped vditor-tooltipped__${menuItem.tipPosition}`;
 
-        const hotkey = updateHotkeyTip(this.menuItem.hotkey ? ` <${this.menuItem.hotkey}>` : "");
+        const hotkey = this.menuItem.hotkey ? ` <${updateHotkeyTip(this.menuItem.hotkey)}>` : "";
         iconElement.setAttribute("aria-label",
             this.menuItem.tip ? this.menuItem.tip + hotkey : i18n[vditor.options.lang][this.menuItem.name] + hotkey);
         this.element.appendChild(iconElement);
@@ -28,7 +25,11 @@ export class MenuItem {
 
     public bindEvent(vditor: IVditor, replace: boolean = false) {
         this.element.children[0].addEventListener(getEventName(), (event) => {
+            if (this.element.firstElementChild.classList.contains(Constants.CLASS_MENU_DISABLED)) {
+                return;
+            }
             if (vditor.currentMode === "wysiwyg") {
+<<<<<<< HEAD
                 let useHighlight = true;
                 let useRender = true;
                 const actionBtn = this.element.children[0];
@@ -221,6 +222,9 @@ export class MenuItem {
                 if (useRender) {
                     afterRenderEvent(vditor);
                 }
+=======
+                toolbarEvent(vditor, this.element.children[0]);
+>>>>>>> dev
             } else {
                 insertText(vditor, this.menuItem.prefix || "", this.menuItem.suffix || "",
                     replace, true);

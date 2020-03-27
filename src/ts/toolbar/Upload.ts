@@ -1,4 +1,5 @@
 import uploadSVG from "../../assets/icons/upload.svg";
+import {Constants} from "../constants";
 import {uploadFiles} from "../upload/index";
 import {MenuItem} from "./MenuItem";
 
@@ -14,11 +15,15 @@ export class Upload extends MenuItem {
     }
 
     public _bindEvent(vditor: IVditor) {
-        this.element.querySelector("input").addEventListener("change", (event: IHTMLInputEvent) => {
-            if (event.target.files.length === 0) {
-                return;
-            }
-            uploadFiles(vditor, event.target.files, event.target);
-        });
+        this.element.querySelector("input").addEventListener("change",
+            (event: InputEvent & { target: HTMLInputElement }) => {
+                if (this.element.firstElementChild.classList.contains(Constants.CLASS_MENU_DISABLED)) {
+                    return;
+                }
+                if (event.target.files.length === 0) {
+                    return;
+                }
+                uploadFiles(vditor, event.target.files, event.target);
+            });
     }
 }

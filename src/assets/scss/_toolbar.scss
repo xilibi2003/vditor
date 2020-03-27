@@ -1,20 +1,25 @@
-/**
- * toolbar.
- *
- * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
- * @version 0.1.2.0, Jun 20, 2019
- */
 .vditor {
   &-toolbar {
-    background-color: $toolbarBg;
-    border-bottom: 1px solid $borderColor;
+    background-color: var(--toolbar-background-color);
+    border-bottom: 1px solid var(--border-color);
     padding: 0 5px;
-    border-radius: 3px 3px 0 0;
 
-    & > div {
+    &--hide {
+      transition: $transition;
+      height: 5px;
+
+      &:hover {
+        background-color: var(--toolbar-background-color);
+        height: auto;
+      }
+    }
+
+    &__item {
       float: left;
+      position: relative;
 
-      & > .vditor-tooltipped {
+      .vditor-tooltipped {
+        color: var(--toolbar-icon-color);
         border: 0;
         margin: 0;
         padding: 10px 5px;
@@ -26,45 +31,35 @@
         &:focus {
           outline: none;
         }
+
+        &:hover {
+          color: var(--toolbar-icon-hover-color);
+        }
       }
-    }
 
-
-    .vditor-tooltipped {
-      color: $toolbarIcon;
-
-      &:hover {
-        color: $toolbarIconHover;
+      svg {
+        fill: currentColor;
+        display: inline-block;
+        stroke-width: 0;
+        stroke: currentColor;
+        width: 15px;
+        height: 15px;
       }
-    }
 
-    svg {
-      fill: currentColor;
-      display: inline-block;
-      stroke-width: 0;
-      stroke: currentColor;
-      width: 15px;
-      height: 15px;
-    }
-
-    input {
-      position: absolute;
-      width: 25px;
-      height: 35px;
-      top: 0;
-      left: 0;
-      cursor: pointer;
-      opacity: .001;
-      overflow: hidden;
-    }
-  }
-
-  &-menu {
-    &--current svg {
-      color: $toolbarIconHover;
+      input {
+        position: absolute;
+        width: 25px;
+        height: 35px;
+        top: 0;
+        left: 0;
+        cursor: pointer;
+        opacity: .001;
+        overflow: hidden;
+      }
     }
 
     &__divider {
+      float: left;
       width: 10px;
       height: 35px;
     }
@@ -74,9 +69,15 @@
       padding: 0 !important;
       height: 0 !important;
     }
+  }
+
+  &-menu {
+    &--current svg {
+      color: var(--toolbar-icon-hover-color);
+    }
 
     &--disabled svg {
-      color: rgba($toolbarIcon, .6);
+      color: var(--second-color);
       cursor: not-allowed;
     }
   }
@@ -93,7 +94,7 @@
       flex: 1;
       width: 200px;
       margin-right: 10px;
-      color: $toolbarIcon;
+      color: var(--toolbar-icon-color);
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
@@ -102,15 +103,15 @@
     &__tail {
       margin-top: 5px;
       font-size: 12px;
-      color: $toolbarIcon;
+      color: var(--toolbar-icon-color);
       display: flex;
 
       a {
         text-decoration: none;
-        color: $toolbarIcon;
+        color: var(--toolbar-icon-color);
 
         &:hover {
-          color: $hoverBg;
+          color: var(--toolbar-icon-hover-color);
         }
       }
     }
