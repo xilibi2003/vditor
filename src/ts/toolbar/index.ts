@@ -27,13 +27,6 @@ import {Strike} from "./Strike";
 import {Table} from "./Table";
 import {Undo} from "./Undo";
 import {Upload} from "./Upload";
-<<<<<<< HEAD
-import {WYSIWYG} from "./WYSIWYG";
-import { Latex } from "./Latex";
-import { InlineLatex } from "./InlineLatex";
-
-=======
->>>>>>> dev
 
 export class Toolbar {
     public elements: { [key: string]: HTMLElement };
