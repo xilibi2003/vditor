@@ -35,8 +35,14 @@
 安装 node LTS 版本
 下载 最新代码并解压
 根目录运行 npm install
-npm run start 启动本地服务器，打开 http://localhost:9000
+
+npm run start 启动本地服务器，打开
+
+http://localhost:9000
+http://localhost:9000/demo/static-preview.html?lang=zh_CN
+
 修改代码
+
 npm run build 打包代码到 dist 目录
 
 ## 说明

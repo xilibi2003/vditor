@@ -22,10 +22,6 @@ window.vditor = new Vditor('vditor', {
     },
   },
 
-
-  toolbar: [ 'undo' , 'redo', 'emoji', 'headings', 'bold', 'italic' , 'strike', '|',
-  'line' , 'quote' , 'list' , 'ordered-list' , 'check' , 'code' , 'inline-code' ,
-  'upload' , 'link' , 'table' ,  'wysiwyg', 'both' , 'preview' , 'format' , 'fullscreen' , 'info' , 'help', 'latex', 'inline-latex','br'] ,
   tab: '\t',
   upload: {
     accept: 'image/*,.mp3, .wav, .rar',
