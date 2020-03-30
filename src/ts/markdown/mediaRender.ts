@@ -17,10 +17,10 @@ const iframeRender = (element: HTMLElement, url: string) => {
     const dailymotionMatch = url.match(/.+dailymotion.com\/(video|hub)\/(\w+)\?/);
 
     if (youtubeMatch && youtubeMatch[1].length === 11) {
-        element.insertAdjacentHTML("afterend",
-            `<iframe class="iframe__video" src="//www.youtube.com/embed/${youtubeMatch[1] +
-            (youtubeMatch[2] ? "?start=" + youtubeMatch[2] : "")}"></iframe>`);
-        element.remove();
+        // element.insertAdjacentHTML("afterend",
+        //     `<iframe class="iframe__video" src="//www.youtube.com/embed/${youtubeMatch[1] +
+        //     (youtubeMatch[2] ? "?start=" + youtubeMatch[2] : "")}"></iframe>`);
+        // element.remove();
     } else if (youkuMatch && youkuMatch[1]) {
         element.insertAdjacentHTML("afterend",
             `<iframe class="iframe__video" src="//player.youku.com/embed/${youkuMatch[1]}"></iframe>`);
