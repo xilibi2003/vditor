@@ -1,9 +1,9 @@
 import {hasClosestBlock} from "../util/hasClosest";
 import {getEditorRange, setRangeByWbr} from "../util/selection";
-import {renderToc} from "./processMD";
+import {renderToc} from "../util/toc";
 
 export const setHeading = (vditor: IVditor, tagName: string) => {
-    const range = getEditorRange(vditor.wysiwyg.element);
+    const range = getEditorRange(vditor);
     let blockElement = hasClosestBlock(range.startContainer);
     if (!blockElement) {
         blockElement = range.startContainer.childNodes[range.startOffset] as HTMLElement;
@@ -24,7 +24,7 @@ export const setHeading = (vditor: IVditor, tagName: string) => {
             blockElement.outerHTML = `<${tagName} data-block="0">${blockElement.innerHTML.trim()}</${tagName}>`;
         }
         setRangeByWbr(vditor.wysiwyg.element, range);
-        renderToc(vditor.wysiwyg.element);
+        renderToc(vditor);
     }
 };
 

@@ -1,19 +1,28 @@
-import {uploadFiles} from "../upload/index";
-import {isCtrl} from "../util/compatibility";
-import {focusEvent, hotkeyEvent, scrollCenter, selectEvent} from "../util/editorCommenEvent";
-import {getMarkdown} from "../util/getMarkdown";
-import {getSelectText} from "./getSelectText";
-import {html2md} from "./html2md";
+import {isCtrl, isFirefox} from "../util/compatibility";
+import {
+    blurEvent,
+    copyEvent, cutEvent,
+    dropEvent,
+    focusEvent,
+    hotkeyEvent,
+    scrollCenter,
+    selectEvent,
+} from "../util/editorCommonEvent";
+import {paste} from "../util/fixBrowserBehavior";
+import {getSelectText} from "../util/getSelectText";
 import {inputEvent} from "./inputEvent";
-import {insertText} from "./insertText";
 
 class Editor {
-    public element: HTMLPreElement;
     public range: Range;
+    public element: HTMLPreElement;
+    public composingLock: boolean = false;
+    public processTimeoutId: number;
+    public hlToolbarTimeoutId: number;
+    public preventInput: boolean;
 
     constructor(vditor: IVditor) {
         this.element = document.createElement("pre");
-        this.element.className = "vditor-textarea";
+        this.element.className = "vditor-sv vditor-reset";
         this.element.setAttribute("placeholder", vditor.options.placeholder);
         this.element.setAttribute("contenteditable", "true");
         this.element.setAttribute("spellcheck", "false");
@@ -21,47 +30,31 @@ class Editor {
         this.bindEvent(vditor);
 
         focusEvent(vditor, this.element);
+        blurEvent(vditor, this.element);
         hotkeyEvent(vditor, this.element);
         selectEvent(vditor, this.element);
+        dropEvent(vditor, this.element);
+        copyEvent(vditor, this.element, this.copy);
+        cutEvent(vditor, this.element, this.copy);
+    }
+
+    private copy(event: ClipboardEvent, vditor: IVditor) {
+        event.stopPropagation();
+        event.preventDefault();
+        event.clipboardData.setData("text/plain", getSelectText(vditor[vditor.currentMode].element));
     }
 
     private bindEvent(vditor: IVditor) {
-        this.element.addEventListener("copy", (event: ClipboardEvent) => {
-            event.stopPropagation();
-            event.preventDefault();
-            event.clipboardData.setData("text/plain", getSelectText(this.element));
-        });
-
-        this.element.addEventListener("keypress", (event: KeyboardEvent) => {
-            if (!isCtrl(event) && event.key === "Enter") {
-                insertText(vditor, "\n", "", true);
-                scrollCenter(this.element);
-                event.preventDefault();
-            }
-        });
-
-        this.element.addEventListener("input", () => {
-            inputEvent(vditor, {
-                enableAddUndoStack: true,
-                enableHint: true,
-                enableInput: true,
+        this.element.addEventListener("paste", (event: ClipboardEvent & { target: HTMLElement }) => {
+            paste(vditor, event, {
+                pasteCode: (code: string) => {
+                    document.execCommand("insertHTML", false, code);
+                },
             });
-            // 选中多行后输入任意字符，br 后无 \n
-            this.element.querySelectorAll("br").forEach((br) => {
-                if (!br.nextElementSibling) {
-                    br.insertAdjacentHTML("afterend", '<span style="display: none">\n</span>');
-                }
-            });
-        });
-
-        this.element.addEventListener("blur", () => {
-            if (vditor.options.blur) {
-                vditor.options.blur(getMarkdown(vditor));
-            }
         });
 
         this.element.addEventListener("scroll", () => {
-            if (!vditor.preview || (vditor.preview && vditor.preview.element.style.display === "none")) {
+            if (vditor.preview.element.style.display !== "block") {
                 return;
             }
             const textScrollTop = this.element.scrollTop;
@@ -77,52 +70,48 @@ class Editor {
             }
         });
 
-        if (vditor.options.upload.url || vditor.options.upload.handler) {
-            this.element.addEventListener("drop", (event: CustomEvent & { dataTransfer?: DataTransfer }) => {
-                if (event.dataTransfer.types[0] !== "Files") {
-                    return;
-                }
-                const files = event.dataTransfer.items;
-                if (files.length === 0) {
-                    return;
-                }
-                uploadFiles(vditor, files);
-                event.preventDefault();
-            });
-        }
+        this.element.addEventListener("compositionstart", (event: InputEvent) => {
+            this.composingLock = true;
+        });
 
-        this.element.addEventListener("paste", (event: ClipboardEvent) => {
-            const textHTML = event.clipboardData.getData("text/html");
-            const textPlain = event.clipboardData.getData("text/plain");
-            event.stopPropagation();
-            event.preventDefault();
-            if (textHTML.trim() !== "") {
-                if (textHTML.length < 106496) {
-                    // https://github.com/b3log/vditor/issues/51
-                    if (textHTML.replace(/<(|\/)(html|body|meta)[^>]*?>/ig, "").trim() ===
-                        `<a href="${textPlain}">${textPlain}</a>` ||
-                        textHTML.replace(/<(|\/)(html|body|meta)[^>]*?>/ig, "").trim() ===
-                        `<!--StartFragment--><a href="${textPlain}">${textPlain}</a><!--EndFragment-->`) {
-                        // https://github.com/b3log/vditor/issues/37
-                    } else {
-                        const mdValue = html2md(vditor, textHTML, textPlain).trimRight();
-                        insertText(vditor, mdValue, "", true);
-                        return;
-                    }
-                }
-            } else if (textPlain.trim() !== "" && event.clipboardData.files.length === 0) {
-                // https://github.com/b3log/vditor/issues/67
-            } else if (event.clipboardData.files.length > 0) {
-                // upload file
-                if (!(vditor.options.upload.url || vditor.options.upload.handler)) {
-                    return;
-                }
-                // NOTE: not work in Safari.
-                // maybe the browser considered local filesystem as the same domain as the pasted data
-                uploadFiles(vditor, event.clipboardData.files);
+        this.element.addEventListener("compositionend", (event: InputEvent) => {
+            if (!isFirefox()) {
+                inputEvent(vditor, event);
+            }
+            this.composingLock = false;
+        });
+
+        this.element.addEventListener("input", (event: InputEvent) => {
+            if (event.inputType === "deleteByDrag" || event.inputType === "insertFromDrop") {
+                // https://github.com/Vanessa219/vditor/issues/801 编辑器内容拖拽问题
                 return;
             }
-            insertText(vditor, textPlain, "", true);
+            if (this.composingLock ||  event.data === "‘" || event.data === "“" || event.data === "《") {
+                return;
+            }
+            if (this.preventInput) {
+                this.preventInput = false;
+                return;
+            }
+            inputEvent(vditor, event);
+        });
+
+        this.element.addEventListener("keyup", (event) => {
+            if (event.isComposing || isCtrl(event)) {
+                return;
+            }
+            if ((event.key === "Backspace" || event.key === "Delete") &&
+                vditor.sv.element.innerHTML !== "" && vditor.sv.element.childNodes.length === 1 &&
+                vditor.sv.element.firstElementChild && vditor.sv.element.firstElementChild.tagName === "DIV"
+                && vditor.sv.element.firstElementChild.childElementCount === 2
+                && (vditor.sv.element.firstElementChild.textContent === "" || vditor.sv.element.textContent === "\n")) {
+                // 为空时显示 placeholder
+                vditor.sv.element.innerHTML = "";
+                return;
+            }
+            if (event.key === "Enter") {
+                scrollCenter(vditor);
+            }
         });
     }
 }

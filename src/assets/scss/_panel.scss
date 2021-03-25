@@ -20,7 +20,7 @@
   &-panel {
     background-color: var(--panel-background-color);
     position: absolute;
-    box-shadow: $layerShadow;
+    box-shadow: var(--panel-shadow);
     border-radius: 3px;
     padding: 5px;
     z-index: 3;
@@ -39,6 +39,29 @@
       animation: none;
       min-width: auto;
       max-width: none;
+      white-space: nowrap;
+      opacity: .86;
+    }
+
+    &--arrow:before {
+      position: absolute;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+      content: " ";
+      border: 7px solid transparent;
+      top: -14px;
+      left: 5px;
+      border-bottom-color: var(--panel-background-color);
+    }
+
+    &--left {
+      right: 0;
+
+      &.vditor-panel--arrow:before {
+        right: 5px;
+        left: auto;
+      }
     }
   }
 

@@ -21,10 +21,12 @@ module.exports = {
   },
   entry: {
     'index.js': './demo/index.js',
+    'render.js': './demo/render.js',
     'jest-puppeteer.js': './demo/jest-puppeteer.js',
+    'comment.js': './demo/comment.js',
   },
   resolve: {
-    extensions: ['.js', '.ts', '.svg', '.png', '.scss'],
+    extensions: ['.js', '.ts', '.png', '.scss'],
   },
   module: {
     rules: [
@@ -52,18 +54,6 @@ module.exports = {
           },
           {
             loader: 'sass-loader', // compiles Sass to CSS
-          },
-        ],
-      },
-      {
-        test: /\.svg$/,
-        include: [path.resolve(__dirname, './src/assets/icons')],
-        use: [
-          {
-            loader: 'html-loader',
-            options: {
-              minimize: true,
-            },
           },
         ],
       },
@@ -113,17 +103,31 @@ module.exports = {
       template: './demo/index.html',
     }),
     new HtmlWebpackPlugin({
+      chunks: ['render.js'],
+      filename: './render.html',
+      template: './demo/render.html',
+    }),
+    new HtmlWebpackPlugin({
       chunks: ['jest-puppeteer.js'],
       filename: './jest-puppeteer.html',
       template: './demo/jest-puppeteer.html',
     }),
+    new HtmlWebpackPlugin({
+      chunks: ['comment.js'],
+      filename: './comment.html',
+      template: './demo/comment.html',
+    }),
     new webpack.DefinePlugin({
       VDITOR_VERSION: JSON.stringify(pkg.version),
     }),
-    new CopyPlugin([
-      {from: 'src/images', to: 'images'},
-      {from: 'src/js', to: 'js'},
-    ]),
+    new CopyPlugin({
+      patterns: [
+        {from: 'src/css', to: 'css'},
+        {from: 'src/images', to: 'images'},
+        {from: 'src/js', to: 'js'},
+        {from: 'types', to: 'types'},
+      ],
+    }),
   ],
   devServer: {
     contentBase: path.join(__dirname, '.'),
@@ -143,9 +147,9 @@ module.exports = {
         target: 'http://localhost:8080',
         pathRewrite: {'^/api': ''},
       },
-      '/hacpai': {
-        target: 'https://hacpai.com',
-        pathRewrite: {'^/hacpai': ''},
+      '/ld246': {
+        target: 'https://ld246.com',
+        pathRewrite: {'^/ld246': ''},
       },
     },
   },

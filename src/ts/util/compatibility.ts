@@ -1,18 +1,17 @@
-// 用于 Safari 弹窗处理
-export const openURL = (url: string) => {
-    if (isSafari()) {
-        window.location.href = url;
-    } else {
-        window.open(url);
-    }
-};
-
 export const isSafari = () => {
     return navigator.userAgent.indexOf("Safari") > -1 && navigator.userAgent.indexOf("Chrome") === -1;
 };
 
 export const isFirefox = () => {
     return navigator.userAgent.toLowerCase().indexOf("firefox") > -1;
+};
+
+export const accessLocalStorage = () => {
+    try {
+       return typeof localStorage !== "undefined";
+    } catch (e) {
+        return false;
+    }
 };
 
 // 用户 iPhone 点击延迟/需要双击的处理
@@ -39,26 +38,25 @@ export const isCtrl = (event: KeyboardEvent) => {
         return false;
     }
 };
-
 // Mac，Windows 快捷键展示
 export const updateHotkeyTip = (hotkey: string) => {
-    if (/Mac/.test(navigator.platform)) {
-        hotkey = hotkey.replace("ctrl", "⌘").replace("shift", "⇧")
-            .replace("alt", "⌥");
-        if (hotkey.indexOf("⇧") > -1) {
-            if (!isFirefox()) {
-                hotkey = hotkey.replace(":", ";").replace("+", "=")
-                    .replace("_", "-");
-            } else {
-                // Mac Firefox 按下 shift 后，key 同 windows 系统
-                hotkey = hotkey.replace(";", ":").replace("=", "+");
-            }
+    if (/Mac/.test(navigator.platform) || navigator.platform === "iPhone") {
+        if (hotkey.indexOf("⇧") > -1 && isFirefox()) {
+            // Mac Firefox 按下 shift 后，key 同 windows 系统
+            hotkey = hotkey.replace(";", ":").replace("=", "+").replace("-", "_");
         }
     } else {
-        hotkey = hotkey.replace("⌘", "ctrl").replace("⇧", "shift")
-            .replace("⌥", "alt");
-        if (hotkey.indexOf("shift") > -1) {
-            hotkey = hotkey.replace(";", ":").replace("=", "+");
+        if (hotkey.startsWith("⌘")) {
+            hotkey = hotkey.replace("⌘", "⌘+");
+        } else if (hotkey.startsWith("⌥") && hotkey.substr(1, 1) !== "⌘") {
+            hotkey = hotkey.replace("⌥", "⌥+");
+        } else {
+            hotkey = hotkey.replace("⇧⌘", "⌘+⇧+").replace("⌥⌘", "⌥+⌘+");
+        }
+        hotkey = hotkey.replace("⌘", "Ctrl").replace("⇧", "Shift")
+            .replace("⌥", "Alt");
+        if (hotkey.indexOf("Shift") > -1) {
+            hotkey = hotkey.replace(";", ":").replace("=", "+").replace("-", "_");
         }
     }
     return hotkey;

@@ -1,27 +1,24 @@
-import recordSVG from "../../assets/icons/record.svg";
 import {Constants} from "../constants";
 import {i18n} from "../i18n/index";
 import {uploadFiles} from "../upload/index";
 import {getEventName} from "../util/compatibility";
+import {RecordMedia} from "../util/RecordMedia";
 import {MenuItem} from "./MenuItem";
-import {RecordMedia} from "./RecordMedia";
 
 export class Record extends MenuItem {
     constructor(vditor: IVditor, menuItem: IMenuItem) {
         super(vditor, menuItem);
-        this.element.children[0].innerHTML = menuItem.icon || recordSVG;
-
         this._bindEvent(vditor);
     }
 
     public _bindEvent(vditor: IVditor) {
         let mediaRecorder: RecordMedia;
         this.element.children[0].addEventListener(getEventName(), (event) => {
+            event.preventDefault();
             if (this.element.firstElementChild.classList.contains(Constants.CLASS_MENU_DISABLED)) {
                 return;
             }
-            event.preventDefault();
-            const editorElement = vditor.currentMode === "wysiwyg" ? vditor.wysiwyg.element : vditor.sv.element;
+            const editorElement = vditor[vditor.currentMode].element;
             if (!mediaRecorder) {
                 navigator.mediaDevices.getUserMedia({audio: true}).then((mediaStream: MediaStream) => {
                     mediaRecorder = new RecordMedia(mediaStream);

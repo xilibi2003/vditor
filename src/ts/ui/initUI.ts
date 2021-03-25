@@ -1,28 +1,40 @@
-import {processAfterRender} from "../ir/process";
-import {formatRender} from "../sv/formatRender";
-import {html2md} from "../sv/html2md";
+import {Constants} from "../constants";
 import {setEditMode} from "../toolbar/EditMode";
-import {renderDomByMd} from "../wysiwyg/renderDomByMd";
+import {accessLocalStorage} from "../util/compatibility";
+import {setContentTheme} from "./setContentTheme";
 import {setTheme} from "./setTheme";
 
+declare global {
+    interface Window {
+        visualViewport: HTMLElement;
+    }
+}
+
 export const initUI = (vditor: IVditor) => {
-    const vditorElement = document.getElementById(vditor.id);
-    vditorElement.innerHTML = "";
-    vditorElement.classList.add("vditor");
+    vditor.element.innerHTML = "";
+    vditor.element.classList.add("vditor");
     setTheme(vditor);
+    setContentTheme(vditor.options.preview.theme.current, vditor.options.preview.theme.path);
     if (typeof vditor.options.height === "number") {
-        vditorElement.style.height = vditor.options.height + "px";
+        vditor.element.style.height = vditor.options.height + "px";
+    }
+    if (typeof vditor.options.minHeight === "number") {
+        vditor.element.style.minHeight = vditor.options.minHeight + "px";
     }
     if (typeof vditor.options.width === "number") {
-        vditorElement.style.width = vditor.options.width + "px";
+        vditor.element.style.width = vditor.options.width + "px";
     } else {
-        vditorElement.style.width = vditor.options.width;
+        vditor.element.style.width = vditor.options.width;
     }
 
-    vditorElement.appendChild(vditor.toolbar.element);
+    vditor.element.appendChild(vditor.toolbar.element);
 
     const contentElement = document.createElement("div");
     contentElement.className = "vditor-content";
+
+    if (vditor.options.outline.position === "left") {
+        contentElement.appendChild(vditor.outline.element);
+    }
 
     contentElement.appendChild(vditor.wysiwyg.element.parentElement);
 
@@ -30,16 +42,15 @@ export const initUI = (vditor: IVditor) => {
 
     contentElement.appendChild(vditor.ir.element.parentElement);
 
-    if (vditor.preview) {
-        contentElement.appendChild(vditor.preview.element);
-    }
+    contentElement.appendChild(vditor.preview.element);
 
     if (vditor.toolbar.elements.devtools) {
         contentElement.appendChild(vditor.devtools.element);
     }
 
-    if (vditor.options.counter > 0) {
-        contentElement.appendChild(vditor.counter.element);
+    if (vditor.options.outline.position === "right") {
+        vditor.outline.element.classList.add("vditor-outline--right");
+        contentElement.appendChild(vditor.outline.element);
     }
 
     if (vditor.upload) {
@@ -50,80 +61,104 @@ export const initUI = (vditor: IVditor) => {
         contentElement.appendChild(vditor.resize.element);
     }
 
-    if (vditor.hint) {
-        contentElement.appendChild(vditor.hint.element);
-    }
+    contentElement.appendChild(vditor.hint.element);
 
     contentElement.appendChild(vditor.tip.element);
 
-    vditorElement.appendChild(contentElement);
+    vditor.element.appendChild(contentElement);
 
-    afterRender(vditor, contentElement);
+    if (vditor.toolbar.elements.export) {
+        // for export pdf
+        vditor.element.insertAdjacentHTML("beforeend",
+            '<iframe style="width: 100%;height: 0;border: 0"></iframe>');
+    }
 
-    setEditMode(vditor, vditor.options.mode);
+    setEditMode(vditor, vditor.options.mode, afterRender(vditor, contentElement));
+
+    document.execCommand("DefaultParagraphSeparator", false, "p");
+
+    if (navigator.userAgent.indexOf("iPhone") > -1 && typeof window.visualViewport !== "undefined") {
+        // https://github.com/Vanessa219/vditor/issues/379
+        let pendingUpdate = false;
+        const viewportHandler = (event: Event) => {
+            if (pendingUpdate) {
+                return;
+            }
+            pendingUpdate = true;
+
+            requestAnimationFrame(() => {
+                pendingUpdate = false;
+                const layoutViewport = vditor.toolbar.element;
+                layoutViewport.style.transform = "none";
+                if (layoutViewport.getBoundingClientRect().top < 0) {
+                    layoutViewport.style.transform = `translate(0, ${-layoutViewport.getBoundingClientRect().top}px)`;
+                }
+            });
+        };
+        window.visualViewport.addEventListener("scroll", viewportHandler);
+        window.visualViewport.addEventListener("resize", viewportHandler);
+    }
 };
 
 export const setPadding = (vditor: IVditor) => {
+    const minPadding = window.innerWidth <= Constants.MOBILE_WIDTH ? 10 : 35;
     if (vditor.wysiwyg.element.parentElement.style.display !== "none") {
         const padding = (vditor.wysiwyg.element.parentElement.clientWidth
             - vditor.options.preview.maxWidth) / 2;
-        vditor.wysiwyg.element.style.padding = `10px ${Math.max(35, padding)}px`;
+        vditor.wysiwyg.element.style.padding = `10px ${Math.max(minPadding, padding)}px`;
     }
 
     if (vditor.ir.element.parentElement.style.display !== "none") {
         const padding = (vditor.ir.element.parentElement.clientWidth
             - vditor.options.preview.maxWidth) / 2;
-        vditor.ir.element.style.padding = `10px ${Math.max(35, padding)}px`;
+        vditor.ir.element.style.padding = `10px ${Math.max(minPadding, padding)}px`;
+    }
+
+    if (vditor.preview.element.style.display !== "block" || vditor.currentMode === "sv") {
+        vditor.toolbar.element.style.paddingLeft = Math.max(5,
+            parseInt(vditor[vditor.currentMode].element.style.paddingLeft || "0", 10) +
+            (vditor.options.outline.position === "left" ? vditor.outline.element.offsetWidth : 0)) + "px";
     }
 };
 
+export const setTypewriterPosition = (vditor: IVditor) => {
+    if (!vditor.options.typewriterMode) {
+        return;
+    }
+    let height: number = window.innerHeight;
+    if (typeof vditor.options.height === "number") {
+        height = vditor.options.height;
+        if (typeof vditor.options.minHeight === "number") {
+            height = Math.max(height, vditor.options.minHeight);
+        }
+        height = Math.min(window.innerHeight, height);
+    }
+    if (vditor.element.classList.contains("vditor--fullscreen")) {
+        height = window.innerHeight;
+    }
+    // 由于 Firefox padding-bottom bug，只能使用 :after
+    vditor[vditor.currentMode].element.style.setProperty("--editor-bottom",
+        ((height - vditor.toolbar.element.offsetHeight) / 2) + "px");
+};
+
 const afterRender = (vditor: IVditor, contentElement: HTMLElement) => {
+    setTypewriterPosition(vditor);
 
-    let height: number = Math.max(contentElement.offsetHeight, 20);
-    if (height < 21 && typeof vditor.options.height === "number") {
-        height = vditor.options.height - 37;
-    }
-
-    if (vditor.options.typewriterMode) {
-        // 由于 Firefox padding-bottom bug，只能使用 :after
-        contentElement.style.setProperty("--editor-bottom", height / 2 + "px");
-    }
-
-    setPadding(vditor);
     window.addEventListener("resize", () => {
         setPadding(vditor);
+        setTypewriterPosition(vditor);
     });
 
     // set default value
-    let initValue = localStorage.getItem("vditor" + vditor.id);
-    if (!vditor.options.cache || !initValue) {
+    let initValue = accessLocalStorage() && localStorage.getItem(vditor.options.cache.id);
+    if (!vditor.options.cache.enable || !initValue) {
         if (vditor.options.value) {
             initValue = vditor.options.value;
         } else if (vditor.originalInnerHTML) {
-            initValue = html2md(vditor, vditor.originalInnerHTML);
-        } else if (!vditor.options.cache) {
+            initValue = vditor.lute.HTML2Md(vditor.originalInnerHTML);
+        } else if (!vditor.options.cache.enable) {
             initValue = "";
         }
     }
-
-    if (!initValue) {
-        return;
-    }
-
-    if (vditor.options.mode === "wysiwyg") {
-        renderDomByMd(vditor, initValue, false);
-    } else if (vditor.options.mode === "sv") {
-        formatRender(vditor, initValue, undefined, {
-            enableAddUndoStack: true,
-            enableHint: false,
-            enableInput: false,
-        });
-    } else if (vditor.options.mode === "ir") {
-        vditor.ir.element.innerHTML = vditor.lute.Md2VditorIRDOM(initValue);
-        processAfterRender(vditor, {
-            enableAddUndoStack: true,
-            enableHint: false,
-            enableInput: false,
-        });
-    }
+    return initValue || "";
 };

@@ -1,4 +1,5 @@
 import {Constants} from "../constants";
+import {getEventName} from "../util/compatibility";
 
 export const removeCurrentToolbar = (toolbar: { [key: string]: HTMLElement }, names: string[]) => {
     names.forEach((name) => {
@@ -70,17 +71,50 @@ export const showToolbar = (toolbar: { [key: string]: HTMLElement }, names: stri
     });
 };
 
-export const hidePanel = (vditor: IVditor, panels: string[]) => {
-    if (vditor.toolbar.emojiPanelElement && panels.includes("emoji")) {
-        vditor.toolbar.emojiPanelElement.style.display = "none";
+// "subToolbar", "hint", "popover"
+export const hidePanel = (vditor: IVditor, panels: string[], exceptElement?: HTMLElement) => {
+    if (panels.includes("subToolbar")) {
+        vditor.toolbar.element.querySelectorAll(".vditor-hint").forEach((item: HTMLElement) => {
+            if (exceptElement && item.isEqualNode(exceptElement)) {
+                return;
+            }
+            item.style.display = "none";
+        });
+        if (vditor.toolbar.elements.emoji) {
+            (vditor.toolbar.elements.emoji.lastElementChild as HTMLElement).style.display = "none";
+        }
     }
-    if (vditor.toolbar.headingPanelElement && panels.includes("headings")) {
-        vditor.toolbar.headingPanelElement.style.display = "none";
-    }
-    if (vditor.toolbar.editModePanelElement && panels.includes("edit-mode")) {
-        vditor.toolbar.editModePanelElement.style.display = "none";
-    }
-    if (vditor.hint && panels.includes("hint")) {
+    if (panels.includes("hint")) {
         vditor.hint.element.style.display = "none";
     }
+    if (vditor.wysiwyg.popover && panels.includes("popover")) {
+        vditor.wysiwyg.popover.style.display = "none";
+    }
+};
+
+export const toggleSubMenu = (vditor: IVditor, panelElement: HTMLElement, actionBtn: Element, level: number) => {
+    actionBtn.addEventListener(getEventName(), (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (actionBtn.classList.contains(Constants.CLASS_MENU_DISABLED)) {
+            return;
+        }
+        vditor.toolbar.element.querySelectorAll(".vditor-hint--current").forEach((item) => {
+            item.classList.remove("vditor-hint--current");
+        });
+        if (panelElement.style.display === "block") {
+            panelElement.style.display = "none";
+        } else {
+            hidePanel(vditor, ["subToolbar", "hint", "popover"], actionBtn.parentElement.parentElement);
+            if (!actionBtn.classList.contains("vditor-tooltipped")) {
+                actionBtn.classList.add("vditor-hint--current");
+            }
+            panelElement.style.display = "block";
+            if (vditor.toolbar.element.getBoundingClientRect().right - actionBtn.getBoundingClientRect().right < 250) {
+                panelElement.classList.add("vditor-panel--left");
+            } else {
+                panelElement.classList.remove("vditor-panel--left");
+            }
+        }
+    });
 };

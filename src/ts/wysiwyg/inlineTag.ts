@@ -5,7 +5,7 @@ export const previoueIsEmptyA = (node: Node) => {
     let previousNode = node.previousSibling as HTMLElement;
     while (previousNode) {
         if (previousNode.nodeType !== 3 && previousNode.tagName === "A" && !previousNode.previousSibling
-            && previousNode.textContent.replace(Constants.ZWSP, "") === "" && previousNode.nextSibling) {
+            && previousNode.innerHTML.replace(Constants.ZWSP, "") === "" && previousNode.nextSibling) {
             return previousNode;
         }
         previousNode = previousNode.previousSibling as HTMLElement;
@@ -21,23 +21,10 @@ export const nextIsCode = (range: Range) => {
 
     if (nextNode && nextNode.nodeType !== 3 && (nextNode.tagName === "CODE" ||
         nextNode.getAttribute("data-type") === "math-inline" ||
+        nextNode.getAttribute("data-type") === "html-entity" ||
         nextNode.getAttribute("data-type") === "html-inline")
     ) {
         return true;
-    }
-    return false;
-};
-
-export const nextIsImg = (range: Range) => {
-    if (range.startContainer.nodeType === 3 && range.startContainer.textContent.length === range.startOffset) {
-        let nextNode: HTMLElement = range.startContainer.nextSibling as HTMLElement;
-        while (nextNode && nextNode.textContent === "" && nextNode.nodeType === 3) {
-            nextNode = nextNode.nextSibling as HTMLElement;
-        }
-        if (nextNode && nextNode.nodeType !== 3 && nextNode.tagName === "IMG") {
-            return nextNode;
-        }
-        return false;
     }
     return false;
 };
@@ -79,13 +66,6 @@ export const getRenderElementNextNode = (blockCodeElement: HTMLElement) => {
     return nextNode.nextSibling;
 };
 
-export const getLastNode = (node: Node) => {
-    while (node && node.lastChild) {
-        node = node.lastChild;
-    }
-    return node;
-};
-
 export const splitElement = (range: Range) => {
     const previousHTML = getPreviousHTML(range.startContainer);
     const nextHTML = getNextHTML(range.startContainer);
@@ -115,7 +95,8 @@ export const modifyPre = (vditor: IVditor, range: Range) => {
             const pElement = document.createElement("p");
             pElement.setAttribute("data-block", "0");
             pElement.textContent = node.textContent;
-            const cloneRangeOffset = range.startOffset;
+            // 为空按下 tab 且 tab = '    ' 时，range.startContainer 不为 node
+            const cloneRangeOffset = range.startContainer.nodeType === 3 ? range.startOffset : node.textContent.length;
             node.parentNode.insertBefore(pElement, node);
             node.remove();
             range.setStart(pElement.firstChild, Math.min(pElement.firstChild.textContent.length, cloneRangeOffset));

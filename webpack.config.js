@@ -45,7 +45,7 @@ SOFTWARE.
 
 const rimraf = require('rimraf')
 
-rimraf.sync('./dist', {},() => {
+rimraf.sync('./dist', {}, () => {
   console.log('rm dist')
 })
 
@@ -100,11 +100,14 @@ module.exports = [
       new WebpackOnBuildPlugin(() => {
         fs.unlinkSync('./dist/index.js')
       }),
-      new CopyPlugin([
-        {from: 'src/images', to: 'images'},
-        {from: 'src/js', to: 'js'},
-        {from: 'types', to: 'types'},
-      ]),
+      new CopyPlugin({
+        patterns: [
+          {from: 'src/css', to: 'css'},
+          {from: 'src/images', to: 'images'},
+          {from: 'src/js', to: 'js'},
+          {from: 'types', to: 'types'},
+        ],
+      }),
     ],
   }, {
     mode: 'production',
@@ -116,13 +119,14 @@ module.exports = [
       libraryTarget: 'umd',
       library: 'Vditor',
       libraryExport: 'default',
+	  globalObject: 'this',
     },
     entry: {
       'index.min': './src/index.ts',
       'method.min': './src/method.ts',
     },
     resolve: {
-      extensions: ['.js', '.ts', '.svg', 'png'],
+      extensions: ['.js', '.ts', 'png'],
     },
     module: {
       rules: [
@@ -162,18 +166,6 @@ module.exports = [
         {
           test: /\.ts$/,
           use: 'ts-loader',
-        },
-        {
-          test: /\.svg$/,
-          include: [path.resolve(__dirname, './src/assets/icons')],
-          use: [
-            {
-              loader: 'html-loader',
-              options: {
-                minimize: true,
-              },
-            },
-          ],
         },
       ],
     },

@@ -3,14 +3,23 @@
     background-color: var(--toolbar-background-color);
     border-bottom: 1px solid var(--border-color);
     padding: 0 5px;
+    line-height: 1;
+
+    &--pin {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
 
     &--hide {
       transition: $transition;
       height: 5px;
+      overflow: hidden;
 
       &:hover {
         background-color: var(--toolbar-background-color);
         height: auto;
+        overflow: visible;
       }
     }
 
@@ -21,18 +30,19 @@
       .vditor-tooltipped {
         color: var(--toolbar-icon-color);
         border: 0;
-        margin: 0;
         padding: 10px 5px;
         background-color: transparent;
-        height: 35px;
+        height: var(--toolbar-height);
         width: 25px;
         box-sizing: border-box;
+        font-size: 0;
 
         &:focus {
           outline: none;
         }
 
-        &:hover {
+        &:focus {
+          cursor: pointer;
           color: var(--toolbar-icon-hover-color);
         }
       }
@@ -49,7 +59,7 @@
       input {
         position: absolute;
         width: 25px;
-        height: 35px;
+        height: var(--toolbar-height);
         top: 0;
         left: 0;
         cursor: pointer;
@@ -60,8 +70,9 @@
 
     &__divider {
       float: left;
-      width: 10px;
-      height: 35px;
+      height: calc(var(--toolbar-height) - (var(--toolbar-divider-margin-top) * 2));
+      border-left: 1px solid var(--second-color);
+      margin: var(--toolbar-divider-margin-top) 8px;
     }
 
     &__br {
@@ -72,13 +83,13 @@
   }
 
   &-menu {
-    &--current svg {
-      color: var(--toolbar-icon-hover-color);
+    &--current {
+      color: var(--toolbar-icon-hover-color) !important;
     }
 
-    &--disabled svg {
-      color: var(--second-color);
-      cursor: not-allowed;
+    &--disabled {
+      color: var(--second-color) !important;
+      cursor: not-allowed !important;
     }
   }
 
@@ -92,6 +103,7 @@
 
     &__tip {
       flex: 1;
+      min-width: 1px;
       width: 200px;
       margin-right: 10px;
       color: var(--toolbar-icon-color);
@@ -149,5 +161,20 @@
       float: left;
       margin: 3px 0 0 3px;
     }
+  }
+}
+
+@media screen and (max-width: $max-width) {
+  .vditor-toolbar__item {
+    padding: 0 12px;
+  }
+  .vditor-panel--left.vditor-panel--arrow:before {
+    right: 17px;
+  }
+}
+
+@media(hover: hover) and (pointer: fine) {
+  .vditor-toolbar__item .vditor-tooltipped:hover {
+    color: var(--toolbar-icon-hover-color);
   }
 }

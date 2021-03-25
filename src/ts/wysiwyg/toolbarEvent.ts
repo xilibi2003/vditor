@@ -1,84 +1,12 @@
 import {Constants} from "../constants";
-import {setCurrentToolbar} from "../toolbar/setToolbar";
-import {hasClosestBlock, hasClosestByAttribute, hasClosestByMatchTag} from "../util/hasClosest";
+import {removeCurrentToolbar} from "../toolbar/setToolbar";
+import {listToggle} from "../util/fixBrowserBehavior";
+import {hasClosestBlock, hasClosestByMatchTag} from "../util/hasClosest";
+import {processCodeRender} from "../util/processCode";
 import {getEditorRange, setRangeByWbr, setSelectionFocus} from "../util/selection";
 import {afterRenderEvent} from "./afterRenderEvent";
-import {genAPopover, highlightToolbar} from "./highlightToolbar";
+import {genAPopover, highlightToolbarWYSIWYG} from "./highlightToolbarWYSIWYG";
 import {getNextHTML, getPreviousHTML, splitElement} from "./inlineTag";
-import {processCodeRender} from "./processCodeRender";
-
-const listToggle = (vditor: IVditor, range: Range, type: string, cancel = true) => {
-    const itemElement = hasClosestByMatchTag(range.startContainer, "LI");
-    vditor.wysiwyg.element.querySelectorAll("wbr").forEach((wbr) => {
-        wbr.remove();
-    });
-    range.insertNode(document.createElement("wbr"));
-
-    if (cancel && itemElement) {
-        // 取消
-        list2p(itemElement.parentElement);
-    } else {
-        if (!itemElement) {
-            // 添加
-            let blockElement = hasClosestByAttribute(range.startContainer, "data-block", "0");
-            if (!blockElement) {
-                vditor.wysiwyg.element.querySelector("wbr").remove();
-                blockElement = vditor.wysiwyg.element.querySelector("p");
-                blockElement.innerHTML = "<wbr>";
-            }
-            if (type === "check") {
-                blockElement.insertAdjacentHTML("beforebegin",
-                    `<ul data-block="0"><li class="vditor-task"><input type="checkbox" /> ${blockElement.innerHTML}</li></ul>`);
-                blockElement.remove();
-            } else if (type === "list") {
-                blockElement.insertAdjacentHTML("beforebegin",
-                    `<ul data-block="0"><li>${blockElement.innerHTML}</li></ul>`);
-                blockElement.remove();
-            } else if (type === "ordered-list") {
-                blockElement.insertAdjacentHTML("beforebegin",
-                    `<ol data-block="0"><li>${blockElement.innerHTML}</li></ol>`);
-                blockElement.remove();
-            }
-        } else {
-            // 切换
-            if (type === "check") {
-                itemElement.parentElement.querySelectorAll("li").forEach((item) => {
-                    item.insertAdjacentHTML("afterbegin", '<input type="checkbox" />');
-                    item.classList.add("vditor-task");
-                });
-            } else {
-                if (itemElement.querySelector("input")) {
-                    itemElement.parentElement.querySelectorAll("li").forEach((item) => {
-                        item.querySelector("input").remove();
-                        item.classList.remove("vditor-task");
-                    });
-                }
-                let element;
-                if (type === "list") {
-                    element = document.createElement("ul");
-                } else {
-                    element = document.createElement("ol");
-                }
-                element.innerHTML = itemElement.parentElement.innerHTML;
-                itemElement.parentElement.parentNode.replaceChild(element, itemElement.parentElement);
-            }
-        }
-    }
-    setRangeByWbr(vditor.wysiwyg.element, range);
-};
-
-const list2p = (listElement: HTMLElement) => {
-    let pHTML = "";
-    for (let i = 0; i < listElement.childElementCount; i++) {
-        const inputElement = listElement.children[i].querySelector("input");
-        if (inputElement) {
-            inputElement.remove();
-        }
-        pHTML += `<p data-block="0">${listElement.children[i].innerHTML.trimLeft()}</p>`;
-    }
-    listElement.insertAdjacentHTML("beforebegin", pHTML);
-    listElement.remove();
-};
 
 const cancelBES = (range: Range, vditor: IVditor, commandName: string) => {
     let element = range.startContainer.parentElement;
@@ -145,25 +73,19 @@ const cancelBES = (range: Range, vditor: IVditor, commandName: string) => {
     setRangeByWbr(vditor.wysiwyg.element, range);
 };
 
-export const toolbarEvent = (vditor: IVditor, actionBtn: Element) => {
-    if (vditor.wysiwyg.composingLock) {
-        // Mac Chrome 中韩文结束会出发此事件，导致重复末尾字符 https://github.com/Vanessa219/vditor/issues/188
+export const toolbarEvent = (vditor: IVditor, actionBtn: Element, event: Event) => {
+    if (vditor.wysiwyg.composingLock // Mac Chrome 中韩文结束会出发此事件，导致重复末尾字符 https://github.com/Vanessa219/vditor/issues/188
+        && event instanceof CustomEvent // 点击按钮应忽略输入法 https://github.com/Vanessa219/vditor/issues/473
+    ) {
         return;
     }
 
     let useHighlight = true;
     let useRender = true;
-    if (actionBtn.classList.contains(Constants.CLASS_MENU_DISABLED)) {
-        return;
-    }
     if (vditor.wysiwyg.element.querySelector("wbr")) {
         vditor.wysiwyg.element.querySelector("wbr").remove();
     }
-    const range = getEditorRange(vditor.wysiwyg.element);
-    if (!vditor.wysiwyg.element.contains(range.startContainer)) {
-        // 光标位于编辑器之外
-        vditor.wysiwyg.element.focus();
-    }
+    const range = getEditorRange(vditor);
 
     let commandName = actionBtn.getAttribute("data-type");
 
@@ -187,11 +109,13 @@ export const toolbarEvent = (vditor: IVditor, actionBtn: Element) => {
                 setRangeByWbr(vditor.wysiwyg.element, range);
             }
         } else if (commandName === "inline-code") {
-            if (!range.collapsed) {
-                document.execCommand("removeFormat", false, "");
-            } else {
-                range.selectNode(range.startContainer.parentElement);
-                document.execCommand("removeFormat", false, "");
+            let inlineCodeElement = hasClosestByMatchTag(range.startContainer, "CODE");
+            if (!inlineCodeElement) {
+                inlineCodeElement = range.startContainer.childNodes[range.startOffset] as HTMLElement;
+            }
+            if (inlineCodeElement) {
+                inlineCodeElement.outerHTML = inlineCodeElement.innerHTML.replace(Constants.ZWSP, "") + "<wbr>";
+                setRangeByWbr(vditor.wysiwyg.element, range);
             }
         } else if (commandName === "link") {
             if (!range.collapsed) {
@@ -202,6 +126,7 @@ export const toolbarEvent = (vditor: IVditor, actionBtn: Element) => {
             }
         } else if (commandName === "check" || commandName === "list" || commandName === "ordered-list") {
             listToggle(vditor, range, commandName);
+            setRangeByWbr(vditor.wysiwyg.element, range);
             useHighlight = false;
             actionBtn.classList.remove("vditor-menu--current");
         } else {
@@ -221,8 +146,8 @@ export const toolbarEvent = (vditor: IVditor, actionBtn: Element) => {
             setRangeByWbr(vditor.wysiwyg.element, range);
         }
 
+        let blockElement = hasClosestBlock(range.startContainer);
         if (commandName === "quote") {
-            let blockElement = hasClosestBlock(range.startContainer);
             if (!blockElement) {
                 blockElement = range.startContainer.childNodes[range.startOffset] as HTMLElement;
             }
@@ -243,7 +168,9 @@ export const toolbarEvent = (vditor: IVditor, actionBtn: Element) => {
             }
         } else if (commandName === "check" || commandName === "list" || commandName === "ordered-list") {
             listToggle(vditor, range, commandName, false);
+            setRangeByWbr(vditor.wysiwyg.element, range);
             useHighlight = false;
+            removeCurrentToolbar(vditor.toolbar.elements, ["check", "list", "ordered-list"]);
             actionBtn.classList.add("vditor-menu--current");
         } else if (commandName === "inline-code") {
             if (range.toString() === "") {
@@ -259,8 +186,7 @@ export const toolbarEvent = (vditor: IVditor, actionBtn: Element) => {
                 range.insertNode(node);
                 setSelectionFocus(range);
             }
-            useHighlight = false;
-            setCurrentToolbar(vditor.toolbar.elements, ["inline-code"]);
+            actionBtn.classList.add("vditor-menu--current");
         } else if (commandName === "code") {
             const node = document.createElement("div");
             node.className = "vditor-wysiwyg__block";
@@ -274,15 +200,15 @@ export const toolbarEvent = (vditor: IVditor, actionBtn: Element) => {
                 range.deleteContents();
             }
             range.insertNode(node);
-            const blockElement = hasClosestByAttribute(range.startContainer, "data-block", "0");
             if (blockElement) {
                 blockElement.outerHTML = vditor.lute.SpinVditorDOM(blockElement.outerHTML);
             }
             setRangeByWbr(vditor.wysiwyg.element, range);
-            vditor.wysiwyg.element.querySelectorAll(".vditor-wysiwyg__block").forEach(
-                (blockRenderItem: HTMLElement) => {
-                    processCodeRender(blockRenderItem, vditor);
+            vditor.wysiwyg.element.querySelectorAll(".vditor-wysiwyg__preview[data-render='2']").forEach(
+                (item: HTMLElement) => {
+                    processCodeRender(item, vditor);
                 });
+            actionBtn.classList.add("vditor-menu--disabled");
         } else if (commandName === "link") {
             if (range.toString() === "") {
                 const aElement = document.createElement("a");
@@ -294,7 +220,6 @@ export const toolbarEvent = (vditor: IVditor, actionBtn: Element) => {
                 const textInputElement = vditor.wysiwyg.popover.querySelector("input");
                 textInputElement.value = "";
                 textInputElement.focus();
-                useHighlight = false;
                 useRender = false;
             } else {
                 const node = document.createElement("a");
@@ -303,22 +228,67 @@ export const toolbarEvent = (vditor: IVditor, actionBtn: Element) => {
                 range.surroundContents(node);
                 range.insertNode(node);
                 setSelectionFocus(range);
+                genAPopover(vditor, node);
+                const textInputElements = vditor.wysiwyg.popover.querySelectorAll("input");
+                textInputElements[0].value = node.innerText;
+                textInputElements[1].focus();
             }
+            useHighlight = false;
+            actionBtn.classList.add("vditor-menu--current");
         } else if (commandName === "table") {
-            document.execCommand("insertHTML", false,
-                "<table data-block=\"0\"><thead><tr><th>col1<wbr></th><th>col2</th><th>col3</th></tr></thead>"
-                + "<tbody><tr><td> </td><td> </td><td> "
-                + "</td></tr><tr><td> </td><td> </td><td> </td></tr></tbody></table>");
-            range.selectNode(vditor.wysiwyg.element.querySelector("wbr").previousSibling);
-            vditor.wysiwyg.element.querySelector("wbr").remove();
-            setSelectionFocus(range);
-        } else if (commandName === "line") {
-            let element = range.startContainer as HTMLElement;
-            if (element.nodeType === 3) {
-                element = range.startContainer.parentElement;
+            let tableHTML = `<table data-block="0"><thead><tr><th>col1<wbr></th><th>col2</th><th>col3</th></tr></thead><tbody><tr><td> </td><td> </td><td> </td></tr><tr><td> </td><td> </td><td> </td></tr></tbody></table>`;
+            if (range.toString().trim() === "") {
+                if (blockElement && blockElement.innerHTML.trim().replace(Constants.ZWSP, "") === "") {
+                    blockElement.outerHTML = tableHTML;
+                } else {
+                    document.execCommand("insertHTML", false, tableHTML);
+                }
+                range.selectNode(vditor.wysiwyg.element.querySelector("wbr").previousSibling);
+                vditor.wysiwyg.element.querySelector("wbr").remove();
+                setSelectionFocus(range);
+            } else {
+                tableHTML = `<table data-block="0"><thead><tr>`;
+                const tableText = range.toString().split("\n");
+                const delimiter = tableText[0].split(",").length > tableText[0].split("\t").length ? "," : "\t";
+
+                tableText.forEach((rows, index) => {
+                    if (index === 0) {
+                        rows.split(delimiter).forEach((header, subIndex) => {
+                            if (subIndex === 0) {
+                                tableHTML += `<th>${header}<wbr></th>`;
+                            } else {
+                                tableHTML += `<th>${header}</th>`;
+                            }
+                        });
+                        tableHTML += "</tr></thead>";
+                    } else {
+                        if (index === 1) {
+                            tableHTML += "<tbody><tr>";
+                        } else {
+                            tableHTML += "<tr>";
+                        }
+                        rows.split(delimiter).forEach((cell) => {
+                            tableHTML += `<td>${cell}</td>`;
+                        });
+                        tableHTML += `</tr>`;
+                    }
+                });
+                tableHTML += "</tbody></table>";
+                document.execCommand("insertHTML", false, tableHTML);
+                setRangeByWbr(vditor.wysiwyg.element, range);
             }
-            element.insertAdjacentHTML("afterend", '<hr data-block="0"><p data-block="0">\n<wbr></p>');
-            setRangeByWbr(vditor.wysiwyg.element, range);
+            useHighlight = false;
+            actionBtn.classList.add("vditor-menu--disabled");
+        } else if (commandName === "line") {
+            if (blockElement) {
+                const hrHTML = '<hr data-block="0"><p data-block="0"><wbr>\n</p>';
+                if (blockElement.innerHTML.trim() === "") {
+                    blockElement.outerHTML = hrHTML;
+                } else {
+                    blockElement.insertAdjacentHTML("afterend", hrHTML);
+                }
+                setRangeByWbr(vditor.wysiwyg.element, range);
+            }
         } else {
             // bold, italic, strike
             useHighlight = false;
@@ -354,7 +324,7 @@ export const toolbarEvent = (vditor: IVditor, actionBtn: Element) => {
     }
 
     if (useHighlight) {
-        highlightToolbar(vditor);
+        highlightToolbarWYSIWYG(vditor);
     }
 
     if (useRender) {

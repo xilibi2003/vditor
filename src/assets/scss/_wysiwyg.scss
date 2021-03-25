@@ -3,6 +3,7 @@
   flex: 1;
   position: relative;
   width: 100%;
+  min-width: 1px;
 
   pre.vditor-reset {
     background-color: var(--panel-background-color);
@@ -45,41 +46,25 @@
     content: ' ';
   }
 
-  code {
+  code[data-marker="`"] {
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
 
   &__block {
-    &[data-type="html-block"] > pre,
-    &[data-type="math-block"] > pre {
-      margin-bottom: 0;
-    }
-
-    code {
-      padding: 0.2em 0.4em !important;
-    }
-
-    & > code {
-      display: none;
-    }
-
-    & > pre {
+    pre:first-child {
       margin-bottom: -1em;
-      display: none;
 
-      & > code {
-        border: 1px solid var(--border-color);
-        overflow: auto !important;
-        display: block;
+      code {
+        height: auto;
+        color: var(--textarea-text-color);
+        height: auto;
+        text-align: left;
       }
     }
 
-    &[data-type=html-inline] .vditor-wysiwyg__preview svg {
-      fill: var(--second-color);
-      height: 12px;
-      cursor: pointer;
-      width: 12px;
+    pre:last-child {
+      margin-bottom: 1em;
     }
   }
 
@@ -87,18 +72,14 @@
     cursor: pointer;
     white-space: initial;
     min-height: 27px;
-
-    pre {
-      margin-bottom: 1em !important;
-    }
   }
 
-  h1:before,
-  h2:before,
-  h3:before,
-  h4:before,
-  h5:before,
-  h6:before,
+  & > .vditor-reset > h1:before,
+  & > .vditor-reset > h2:before,
+  & > .vditor-reset > h3:before,
+  & > .vditor-reset > h4:before,
+  & > .vditor-reset > h5:before,
+  & > .vditor-reset > h6:before,
   div.vditor-wysiwyg__block:before,
   div[data-type="link-ref-defs-block"]:before,
   div[data-type="footnotes-block"]:before,
@@ -112,23 +93,23 @@
     color: var(--second-color);
   }
 
-  h2:before {
+  & > .vditor-reset > h2:before {
     content: 'H2';
   }
 
-  h3:before {
+  & > .vditor-reset > h3:before {
     content: 'H3';
   }
 
-  h4:before {
+  & > .vditor-reset > h4:before {
     content: 'H4';
   }
 
-  h5:before {
+  & > .vditor-reset > h5:before {
     content: 'H5';
   }
 
-  h6:before {
+  & > .vditor-reset > h6:before {
     content: 'H6';
   }
 
@@ -144,6 +125,14 @@
     content: "</>";
   }
 
+  div.vditor-wysiwyg__block[data-type="yaml-front-matter"]:before {
+    content: "F";
+  }
+
+  div.vditor-wysiwyg__block[data-type="math-block"]:before {
+    content: "$$";
+  }
+
   .vditor-toc:before {
     content: "ToC";
   }
@@ -156,6 +145,10 @@
 
   details {
     white-space: initial;
+  }
+
+  a {
+    cursor: pointer;
   }
 
   span[data-type="backslash"] > span {
@@ -181,5 +174,22 @@
 
   div[data-type="link-ref-defs-block"] {
     color: var(--blockquote-color);
+  }
+}
+
+@media screen and (max-width: $max-width) {
+  .vditor-wysiwyg {
+    h1:before,
+    h2:before,
+    h3:before,
+    h4:before,
+    h5:before,
+    h6:before,
+    div.vditor-wysiwyg__block:before,
+    div[data-type="link-ref-defs-block"]:before,
+    div[data-type="footnotes-block"]:before,
+    .vditor-toc:before {
+      content: none;
+    }
   }
 }

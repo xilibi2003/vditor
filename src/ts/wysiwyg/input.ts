@@ -1,15 +1,14 @@
 import {
     getTopList,
-    hasClosestBlock, hasClosestByAttribute,
-    hasClosestByClassName,
-    hasClosestByTag,
+    hasClosestBlock, hasClosestByAttribute, hasTopClosestByTag,
 } from "../util/hasClosest";
+import { hasClosestByTag} from "../util/hasClosestByHeadings";
 import {log} from "../util/log";
+import {processCodeRender} from "../util/processCode";
 import {setRangeByWbr} from "../util/selection";
+import {renderToc} from "../util/toc";
 import {afterRenderEvent} from "./afterRenderEvent";
 import {previoueIsEmptyA} from "./inlineTag";
-import {processCodeRender} from "./processCodeRender";
-import {isToC, renderToc} from "./processMD";
 
 export const input = (vditor: IVditor, range: Range, event?: InputEvent) => {
     let blockElement = hasClosestBlock(range.startContainer);
@@ -19,16 +18,7 @@ export const input = (vditor: IVditor, range: Range, event?: InputEvent) => {
         blockElement = vditor.wysiwyg.element;
     }
 
-    const renderElement = hasClosestByClassName(range.startContainer, "vditor-wysiwyg__block");
-    const codeElement = hasClosestByTag(range.startContainer, "CODE");
-    if (codeElement && renderElement && renderElement.getAttribute("data-block") === "0") {
-        if (renderElement.firstElementChild.tagName === "PRE") {
-            processCodeRender(renderElement, vditor);
-        } else {
-            // 代码块前为空行，按下向后删除键，代码块内容会被删除
-            renderElement.outerHTML = `<p data-block="0">${renderElement.textContent}</p>`;
-        }
-    } else if (event && event.inputType !== "formatItalic"
+    if (event && event.inputType !== "formatItalic"
         && event.inputType !== "deleteByDrag"
         && event.inputType !== "insertFromDrop"
         && event.inputType !== "formatBold"
@@ -47,10 +37,6 @@ export const input = (vditor: IVditor, range: Range, event?: InputEvent) => {
             previousAEmptyElement.remove();
         }
 
-        if (blockElement.tagName.indexOf("H") === 0 && blockElement.tagName.length === 2) {
-            renderToc(vditor.wysiwyg.element);
-        }
-
         // 保存光标
         vditor.wysiwyg.element.querySelectorAll("wbr").forEach((wbr) => {
             wbr.remove();
@@ -62,18 +48,34 @@ export const input = (vditor: IVditor, range: Range, event?: InputEvent) => {
             item.removeAttribute("style");
         });
 
+        // 移除空评论
+        blockElement.querySelectorAll(".vditor-comment").forEach((item) => {
+            if (item.textContent.trim() === "") {
+                item.classList.remove("vditor-comment", "vditor-comment--focus");
+                item.removeAttribute("data-cmtids");
+            }
+        });
+        //  在有评论的行首换行后，该行的前一段会带有评论标识
+        blockElement.previousElementSibling?.querySelectorAll(".vditor-comment").forEach((item) => {
+            if (item.textContent.trim() === "") {
+                item.classList.remove("vditor-comment", "vditor-comment--focus");
+                item.removeAttribute("data-cmtids");
+            }
+        });
+
         let html = "";
-        if (blockElement.getAttribute("data-type") === "link-ref-defs-block" || isToC(blockElement.innerText)) {
-            // 修改链接引用或 ToC
+        if (blockElement.getAttribute("data-type") === "link-ref-defs-block") {
+            // 修改链接引用
             blockElement = vditor.wysiwyg.element;
         }
 
         const isWYSIWYGElement = blockElement.isEqualNode(vditor.wysiwyg.element);
+        const footnoteElement = hasClosestByAttribute(blockElement, "data-type", "footnotes-block");
 
         if (!isWYSIWYGElement) {
             // 列表需要到最顶层
             const topListElement = getTopList(range.startContainer);
-            if (topListElement) {
+            if (topListElement && !footnoteElement) {
                 const blockquoteElement = hasClosestByTag(range.startContainer, "BLOCKQUOTE");
                 if (blockquoteElement) {
                     // li 中有 blockquote 就只渲染 blockquote
@@ -84,7 +86,6 @@ export const input = (vditor: IVditor, range: Range, event?: InputEvent) => {
             }
 
             // 修改脚注
-            const footnoteElement = hasClosestByAttribute(blockElement, "data-type", "footnotes-block");
             if (footnoteElement) {
                 blockElement = footnoteElement;
             }
@@ -108,17 +109,20 @@ export const input = (vditor: IVditor, range: Range, event?: InputEvent) => {
             }
 
             // 添加链接引用
-            const allLinkRefDefsElement = vditor.wysiwyg.element.querySelector("[data-type='link-ref-defs-block']");
-            if (allLinkRefDefsElement && !blockElement.isEqualNode(allLinkRefDefsElement)) {
-                html += allLinkRefDefsElement.outerHTML;
-                allLinkRefDefsElement.remove();
-            }
+            vditor.wysiwyg.element.querySelectorAll("[data-type='link-ref-defs-block']").forEach((item) => {
+                if (item && !(blockElement as HTMLElement).isEqualNode(item)) {
+                    html += item.outerHTML;
+                    item.remove();
+                }
+            });
+
             // 添加脚注
-            const allFootnoteElement = vditor.wysiwyg.element.querySelector("[data-type='footnotes-block']");
-            if (allFootnoteElement && !blockElement.isEqualNode(allFootnoteElement)) {
-                html += allFootnoteElement.outerHTML;
-                allFootnoteElement.remove();
-            }
+            vditor.wysiwyg.element.querySelectorAll("[data-type='footnotes-block']").forEach((item) => {
+                if (item && !(blockElement as HTMLElement).isEqualNode(item)) {
+                    html += item.outerHTML;
+                    item.remove();
+                }
+            });
         } else {
             html = blockElement.innerHTML;
         }
@@ -128,36 +132,76 @@ export const input = (vditor: IVditor, range: Range, event?: InputEvent) => {
             .replace(/<\/(em|i)><em data-marker="\W{1}">/g, "")
             .replace(/<\/(s|strike)><s data-marker="~{1,2}">/g, "");
 
+        if (html === '<p data-block="0">```<wbr></p>' && vditor.hint.recentLanguage) {
+            html = '<p data-block="0">```<wbr></p>'.replace("```", "```" + vditor.hint.recentLanguage);
+        }
+
         log("SpinVditorDOM", html, "argument", vditor.options.debugger);
-
         html = vditor.lute.SpinVditorDOM(html);
-
         log("SpinVditorDOM", html, "result", vditor.options.debugger);
 
         if (isWYSIWYGElement) {
             blockElement.innerHTML = html;
         } else {
             blockElement.outerHTML = html;
-            const allLinkRefDefsElement = vditor.wysiwyg.element.querySelector("[data-type='link-ref-defs-block']");
-            if (allLinkRefDefsElement) {
-                vditor.wysiwyg.element.insertAdjacentElement("beforeend", allLinkRefDefsElement);
-            }
 
-            const allFootnoteElement = vditor.wysiwyg.element.querySelector("[data-type='footnotes-block']");
-            if (allFootnoteElement) {
-                vditor.wysiwyg.element.insertAdjacentElement("beforeend", allFootnoteElement);
+            if (footnoteElement) {
+                // 更新正文中的 tip
+                const footnoteItemElement = hasTopClosestByTag(vditor.wysiwyg.element.querySelector("wbr"), "LI");
+                if (footnoteItemElement) {
+                    const footnoteRefElement = vditor.wysiwyg.element.querySelector(`sup[data-type="footnotes-ref"][data-footnotes-label="${footnoteItemElement.getAttribute("data-marker")}"]`);
+                    if (footnoteRefElement) {
+                        footnoteRefElement.setAttribute("aria-label",
+                            footnoteItemElement.textContent.trim().substr(0, 24));
+                    }
+                }
             }
+        }
+
+        let firstLinkRefDefElement: Element;
+        const allLinkRefDefsElement = vditor.wysiwyg.element.querySelectorAll("[data-type='link-ref-defs-block']");
+        allLinkRefDefsElement.forEach((item, index) => {
+            if (index === 0) {
+                firstLinkRefDefElement = item;
+            } else {
+                firstLinkRefDefElement.insertAdjacentHTML("beforeend", item.innerHTML);
+                item.remove();
+            }
+        });
+        if (allLinkRefDefsElement.length > 0) {
+            vditor.wysiwyg.element.insertAdjacentElement("beforeend", allLinkRefDefsElement[0]);
+        }
+
+        // 脚注合并后添加的末尾
+        let firstFootnoteElement: Element;
+        const allFootnoteElement = vditor.wysiwyg.element.querySelectorAll("[data-type='footnotes-block']");
+        allFootnoteElement.forEach((item, index) => {
+            if (index === 0) {
+                firstFootnoteElement = item;
+            } else {
+                firstFootnoteElement.insertAdjacentHTML("beforeend", item.innerHTML);
+                item.remove();
+            }
+        });
+        if (allFootnoteElement.length > 0) {
+            vditor.wysiwyg.element.insertAdjacentElement("beforeend", allFootnoteElement[0]);
         }
 
         // 设置光标
         setRangeByWbr(vditor.wysiwyg.element, range);
 
-        // TODO: 目前为全局渲染。可优化为只选取当前列表、当前列表紧邻的前后列表；最顶层列表；当前块进行渲染
-        vditor.wysiwyg.element.querySelectorAll(".vditor-wysiwyg__block").forEach((blockRenderItem: HTMLElement) => {
-            processCodeRender(blockRenderItem, vditor);
-        });
-    }
+        vditor.wysiwyg.element.querySelectorAll(".vditor-wysiwyg__preview[data-render='2']")
+            .forEach((item: HTMLElement) => {
+                processCodeRender(item, vditor);
+            });
 
+        if (event && (event.inputType === "deleteContentBackward" || event.inputType === "deleteContentForward") &&
+            vditor.options.comment.enable) {
+            vditor.wysiwyg.triggerRemoveComment(vditor);
+            vditor.options.comment.adjustTop(vditor.wysiwyg.getComments(vditor, true));
+        }
+    }
+    renderToc(vditor);
     afterRenderEvent(vditor, {
         enableAddUndoStack: true,
         enableHint: true,

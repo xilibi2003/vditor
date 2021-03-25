@@ -1,4 +1,3 @@
-import resizeSVG from "../../assets/icons/resize.svg";
 
 export class Resize {
     public element: HTMLElement;
@@ -6,7 +5,7 @@ export class Resize {
     constructor(vditor: IVditor) {
         this.element = document.createElement("div");
         this.element.className = `vditor-resize vditor-resize--${vditor.options.resize.position}`;
-        this.element.innerHTML = `<div>${resizeSVG}</div>`;
+        this.element.innerHTML = `<div><svg><use xlink:href="#vditor-icon-resize"></use></svg></div>`;
 
         this.bindEvent(vditor);
     }
@@ -15,10 +14,9 @@ export class Resize {
         this.element.addEventListener("mousedown", (event: MouseEvent) => {
 
             const documentSelf = document;
-            const vditorElement = document.getElementById(vditor.id);
             const y = event.clientY;
-            const height = vditorElement.offsetHeight;
-            const minHeight = 63 + vditorElement.querySelector(".vditor-toolbar").clientHeight;
+            const height = vditor.element.offsetHeight;
+            const minHeight = 63 + vditor.element.querySelector(".vditor-toolbar").clientHeight;
             documentSelf.ondragstart = () => false;
 
             if (window.captureEvents) {
@@ -29,9 +27,9 @@ export class Resize {
 
             documentSelf.onmousemove = (moveEvent: MouseEvent) => {
                 if (vditor.options.resize.position === "top") {
-                    vditorElement.style.height = Math.max(minHeight, height + (y - moveEvent.clientY)) + "px";
+                    vditor.element.style.height = Math.max(minHeight, height + (y - moveEvent.clientY)) + "px";
                 } else {
-                    vditorElement.style.height = Math.max(minHeight, height + (moveEvent.clientY - y)) + "px";
+                    vditor.element.style.height = Math.max(minHeight, height + (moveEvent.clientY - y)) + "px";
                 }
                 if (vditor.options.typewriterMode) {
                     vditor.sv.element.style.paddingBottom =
@@ -41,7 +39,7 @@ export class Resize {
 
             documentSelf.onmouseup = () => {
                 if (vditor.options.resize.after) {
-                    vditor.options.resize.after(vditorElement.offsetHeight - height);
+                    vditor.options.resize.after(vditor.element.offsetHeight - height);
                 }
 
                 if (window.captureEvents) {

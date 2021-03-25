@@ -1,17 +1,31 @@
-import {uploadFiles} from "../upload";
-import {setHeaders} from "../upload/setHeaders";
-import {isCtrl} from "../util/compatibility";
-import {focusEvent, hotkeyEvent, selectEvent} from "../util/editorCommenEvent";
-import { hasClosestByMatchTag} from "../util/hasClosest";
-import {processPasteCode} from "../util/processPasteCode";
-import {getSelectPosition, insertHTML, setSelectionByPosition} from "../util/selection";
+import {Constants} from "../constants";
+import {isCtrl, isFirefox} from "../util/compatibility";
+import {
+    blurEvent,
+    copyEvent, cutEvent, dblclickEvent,
+    dropEvent,
+    focusEvent,
+    hotkeyEvent,
+    scrollCenter,
+    selectEvent,
+} from "../util/editorCommonEvent";
+import {paste} from "../util/fixBrowserBehavior";
+import {hasClosestByAttribute, hasClosestByClassName} from "../util/hasClosest";
+import {
+    getEditorRange, setRangeByWbr,
+    setSelectionFocus,
+} from "../util/selection";
+import {clickToc} from "../util/toc";
 import {expandMarker} from "./expandMarker";
+import {highlightToolbarIR} from "./highlightToolbarIR";
 import {input} from "./input";
-import {processAfterRender} from "./process";
+import {processAfterRender, processHint} from "./process";
 
 class IR {
+    public range: Range;
     public element: HTMLPreElement;
     public processTimeoutId: number;
+    public hlToolbarTimeoutId: number;
     public composingLock: boolean = false;
     public preventInput: boolean;
 
@@ -26,146 +40,64 @@ class IR {
 
         this.bindEvent(vditor);
 
-        document.execCommand("DefaultParagraphSeparator", false, "p");
-
         focusEvent(vditor, this.element);
+        dblclickEvent(vditor, this.element);
+        blurEvent(vditor, this.element);
         hotkeyEvent(vditor, this.element);
         selectEvent(vditor, this.element);
+        dropEvent(vditor, this.element);
+        copyEvent(vditor, this.element, this.copy);
+        cutEvent(vditor, this.element, this.copy);
+    }
+
+    private copy(event: ClipboardEvent, vditor: IVditor) {
+        const range = getSelection().getRangeAt(0);
+        if (range.toString() === "") {
+            return;
+        }
+        event.stopPropagation();
+        event.preventDefault();
+
+        const tempElement = document.createElement("div");
+        tempElement.appendChild(range.cloneContents());
+
+        event.clipboardData.setData("text/plain", vditor.lute.VditorIRDOM2Md(tempElement.innerHTML).trim());
+        event.clipboardData.setData("text/html", "");
     }
 
     private bindEvent(vditor: IVditor) {
-        this.element.addEventListener("copy", (event: ClipboardEvent & { target: HTMLElement }) => {
-            const range = getSelection().getRangeAt(0);
-            if (range.toString() === "") {
-                return;
-            }
-            event.stopPropagation();
-            event.preventDefault();
-
-            const tempElement = document.createElement("div");
-            tempElement.appendChild(range.cloneContents());
-
-            event.clipboardData.setData("text/plain", vditor.lute.VditorIRDOM2Md(tempElement.innerHTML).trim());
-            event.clipboardData.setData("text/html", "");
-        });
-
         this.element.addEventListener("paste", (event: ClipboardEvent & { target: HTMLElement }) => {
-            event.stopPropagation();
-            event.preventDefault();
-            let textHTML = event.clipboardData.getData("text/html");
-            const textPlain = event.clipboardData.getData("text/plain");
-
-            // 浏览器地址栏拷贝处理
-            if (textHTML.replace(/<(|\/)(html|body|meta)[^>]*?>/ig, "").trim() ===
-                `<a href="${textPlain}">${textPlain}</a>` ||
-                textHTML.replace(/<(|\/)(html|body|meta)[^>]*?>/ig, "").trim() ===
-                `<!--StartFragment--><a href="${textPlain}">${textPlain}</a><!--EndFragment-->`) {
-                textHTML = "";
-            }
-
-            // process word
-            const doc = new DOMParser().parseFromString(textHTML, "text/html");
-            if (doc.body) {
-                textHTML = doc.body.innerHTML;
-            }
-
-            // process code
-            const code = processPasteCode(textHTML, textPlain, "ir");
-            const codeElement = hasClosestByMatchTag(event.target, "CODE");
-            if (codeElement) {
-                // 粘贴在代码位置
-                const position = getSelectPosition(event.target);
-                codeElement.textContent = codeElement.textContent.substring(0, position.start)
-                    + textPlain + codeElement.textContent.substring(position.end);
-                setSelectionByPosition(position.start + textPlain.length, position.start + textPlain.length,
-                    codeElement.parentElement);
-            } else if (code) {
-                document.execCommand("insertHTML", false, code);
-            } else {
-                if (textHTML.trim() !== "") {
-                    const tempElement = document.createElement("div");
-                    tempElement.innerHTML = textHTML;
-                    tempElement.querySelectorAll("[style]").forEach((e) => {
-                        e.removeAttribute("style");
-                    });
-                    vditor.lute.SetJSRenderers({
-                        renderers: {
-                            HTML2VditorIRDOM: {
-                                renderLinkDest: (node) => {
-                                    const src = node.TokensStr();
-                                    if (node.__internal_object__.Parent.Type === 34 && src
-                                        && src.indexOf("file://") === -1 && vditor.options.upload.linkToImgUrl) {
-                                        const xhr = new XMLHttpRequest();
-                                        xhr.open("POST", vditor.options.upload.linkToImgUrl);
-                                        setHeaders(vditor, xhr);
-                                        xhr.onreadystatechange = () => {
-                                            if (xhr.readyState === XMLHttpRequest.DONE) {
-                                                const responseJSON = JSON.parse(xhr.responseText);
-                                                if (xhr.status === 200) {
-                                                    if (responseJSON.code !== 0) {
-                                                        vditor.tip.show(responseJSON.msg);
-                                                        return;
-                                                    }
-                                                    // TODO
-                                                    const original = responseJSON.data.originalURL;
-                                                    const imgElement: HTMLImageElement =
-                                                        this.element.querySelector(`img[src="${original}"]`);
-                                                    imgElement.src = responseJSON.data.url;
-                                                    processAfterRender(vditor);
-                                                } else {
-                                                    vditor.tip.show(responseJSON.msg);
-                                                }
-                                            }
-                                        };
-                                        xhr.send(JSON.stringify({url: src}));
-                                    }
-                                    return ["", Lute.WalkStop];
-                                },
-                            },
-                        },
-                    });
-                    insertHTML(vditor.lute.HTML2VditorIRDOM(tempElement.innerHTML), vditor);
-                } else if (event.clipboardData.files.length > 0 && vditor.options.upload.url) {
-                    uploadFiles(vditor, event.clipboardData.files);
-                } else if (textPlain.trim() !== "" && event.clipboardData.files.length === 0) {
-                    insertHTML(vditor.lute.Md2VditorIRDOM(textPlain), vditor);
-                }
-            }
-
-            processAfterRender(vditor);
-        });
-
-        if (vditor.options.upload.url || vditor.options.upload.handler) {
-            this.element.addEventListener("drop",
-                (event: CustomEvent & { dataTransfer?: DataTransfer, target: HTMLElement }) => {
-                    if (event.dataTransfer.types[0] !== "Files") {
-                        return;
-                    }
-                    const files = event.dataTransfer.items;
-                    if (files.length > 0) {
-                        uploadFiles(vditor, files);
-                    }
-                    event.preventDefault();
-                });
-        }
-
-        this.element.addEventListener("compositionend", (event: InputEvent) => {
-            input(vditor, getSelection().getRangeAt(0).cloneRange());
+            paste(vditor, event, {
+                pasteCode: (code: string) => {
+                    document.execCommand("insertHTML", false, code);
+                },
+            });
         });
 
         this.element.addEventListener("compositionstart", (event: InputEvent) => {
             this.composingLock = true;
         });
 
+        this.element.addEventListener("compositionend", (event: InputEvent) => {
+            if (!isFirefox()) {
+                input(vditor, getSelection().getRangeAt(0).cloneRange());
+            }
+            this.composingLock = false;
+        });
+
         this.element.addEventListener("input", (event: InputEvent) => {
+            if (event.inputType === "deleteByDrag" || event.inputType === "insertFromDrop") {
+                // https://github.com/Vanessa219/vditor/issues/801 编辑器内容拖拽问题
+                return;
+            }
             if (this.preventInput) {
                 this.preventInput = false;
                 return;
             }
-            if (this.composingLock) {
+            if (this.composingLock || event.data === "‘" || event.data === "“" || event.data === "《") {
                 return;
             }
-            input(vditor, getSelection().getRangeAt(0).cloneRange());
+            input(vditor, getSelection().getRangeAt(0).cloneRange(), false, event);
         });
 
         this.element.addEventListener("click", (event: MouseEvent & { target: HTMLInputElement }) => {
@@ -180,23 +112,137 @@ class IR {
                 return;
             }
 
-            expandMarker(getSelection().getRangeAt(0), vditor);
+            const range = getEditorRange(vditor);
+
+            // 点击后光标落于预览区
+            let previewElement = hasClosestByClassName(event.target, "vditor-ir__preview");
+            if (!previewElement) {
+                previewElement = hasClosestByClassName(
+                    range.startContainer, "vditor-ir__preview");
+            }
+            if (previewElement) {
+                if (previewElement.previousElementSibling.firstElementChild) {
+                    range.selectNodeContents(previewElement.previousElementSibling.firstElementChild);
+                } else {
+                    // 行内数学公式
+                    range.selectNodeContents(previewElement.previousElementSibling);
+                }
+                range.collapse(true);
+                setSelectionFocus(range);
+                scrollCenter(vditor);
+            }
+
+            // 点击图片光标选中图片地址
+            if (event.target.tagName === "IMG") {
+                const linkElement =
+                    event.target.parentElement.querySelector<HTMLSpanElement>(".vditor-ir__marker--link");
+                if (linkElement) {
+                    range.selectNode(linkElement);
+                    setSelectionFocus(range);
+                }
+            }
+            // 打开链接
+            const aElement = hasClosestByAttribute(event.target, "data-type", "a");
+            if (aElement && (!aElement.classList.contains("vditor-ir__node--expand"))) {
+                window.open(aElement.querySelector(":scope > .vditor-ir__marker--link").textContent);
+                return;
+            }
+
+            if (event.target.isEqualNode(this.element) && this.element.lastElementChild && range.collapsed) {
+                const lastRect = this.element.lastElementChild.getBoundingClientRect();
+                if (event.y > lastRect.top + lastRect.height) {
+                    if (this.element.lastElementChild.tagName === "P" &&
+                        this.element.lastElementChild.textContent.trim().replace(Constants.ZWSP, "") === "") {
+                        range.selectNodeContents(this.element.lastElementChild);
+                        range.collapse(false);
+                    } else {
+                        this.element.insertAdjacentHTML("beforeend",
+                            `<p data-block="0">${Constants.ZWSP}<wbr></p>`);
+                        setRangeByWbr(this.element, range);
+                    }
+                }
+            }
+
+            if (range.toString() === "") {
+                expandMarker(range, vditor);
+            } else {
+                // https://github.com/Vanessa219/vditor/pull/681 当点击选中区域时 eventTarget 与 range 不一致，需延迟等待 range 发生变化
+                setTimeout(() => {
+                    expandMarker(getEditorRange(vditor), vditor);
+                });
+            }
+            clickToc(event, vditor);
+            highlightToolbarIR(vditor);
         });
 
         this.element.addEventListener("keyup", (event) => {
             if (event.isComposing || isCtrl(event)) {
                 return;
             }
+            if (event.key === "Enter") {
+                scrollCenter(vditor);
+            }
+            highlightToolbarIR(vditor);
             if ((event.key === "Backspace" || event.key === "Delete") &&
                 vditor.ir.element.innerHTML !== "" && vditor.ir.element.childNodes.length === 1 &&
                 vditor.ir.element.firstElementChild && vditor.ir.element.firstElementChild.tagName === "P"
+                && vditor.ir.element.firstElementChild.childElementCount === 0
                 && (vditor.ir.element.textContent === "" || vditor.ir.element.textContent === "\n")) {
                 // 为空时显示 placeholder
                 vditor.ir.element.innerHTML = "";
                 return;
             }
-            if (event.key.indexOf("Arrow") > -1) {
-                expandMarker(getSelection().getRangeAt(0), vditor);
+            const range = getEditorRange(vditor);
+            if (event.key === "Backspace") {
+                // firefox headings https://github.com/Vanessa219/vditor/issues/211
+                if (isFirefox() && range.startContainer.textContent === "\n" && range.startOffset === 1) {
+                    range.startContainer.textContent = "";
+                    expandMarker(range, vditor);
+                }
+                // 数学公式前是空块，空块前是 table，在空块前删除，数学公式会多一个 br
+                this.element.querySelectorAll(".language-math").forEach((item) => {
+                    const brElement = item.querySelector("br");
+                    if (brElement) {
+                        brElement.remove();
+                    }
+                });
+            } else if (event.key.indexOf("Arrow") > -1) {
+                if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                    processHint(vditor);
+                }
+                expandMarker(range, vditor);
+            } else if (event.keyCode === 229 && event.code === "" && event.key === "Unidentified") {
+                // https://github.com/Vanessa219/vditor/issues/508 IR 删除到节点需展开
+                expandMarker(range, vditor);
+            }
+
+            const previewRenderElement = hasClosestByClassName(range.startContainer, "vditor-ir__preview");
+
+            if (previewRenderElement) {
+                if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+                    if (previewRenderElement.previousElementSibling.firstElementChild) {
+                        range.selectNodeContents(previewRenderElement.previousElementSibling.firstElementChild);
+                    } else {
+                        // 行内数学公式/html entity
+                        range.selectNodeContents(previewRenderElement.previousElementSibling);
+                    }
+                    range.collapse(false);
+                    event.preventDefault();
+                    return true;
+                }
+                if (previewRenderElement.tagName === "SPAN" &&
+                    (event.key === "ArrowDown" || event.key === "ArrowRight")) {
+                    if (previewRenderElement.parentElement.getAttribute("data-type") === "html-entity") {
+                        // html entity
+                        previewRenderElement.parentElement.insertAdjacentText("afterend", Constants.ZWSP);
+                        range.setStart(previewRenderElement.parentElement.nextSibling, 1);
+                    } else {
+                        range.selectNodeContents(previewRenderElement.parentElement.lastElementChild);
+                    }
+                    range.collapse(false);
+                    event.preventDefault();
+                    return true;
+                }
             }
         });
     }
